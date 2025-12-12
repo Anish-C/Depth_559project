@@ -170,6 +170,10 @@ const Utils = {
         }
         
         divide(scalar) {
+            if (scalar === 0) {
+                console.warn('Vector2.divide: Division by zero, returning zero vector');
+                return new Utils.Vector2(0, 0);
+            }
             return new Utils.Vector2(this.x / scalar, this.y / scalar);
         }
         

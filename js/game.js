@@ -168,7 +168,7 @@ const Game = {
         console.log('Starting game...');
         this.isRunning = true;
         this.isPaused = false;
-        this.lastTime = performance.now();
+        this.lastTime = performance.now ? performance.now() : Date.now();
         
         // Update UI
         this.updateUIButtons();
@@ -192,7 +192,7 @@ const Game = {
         this.updateUIButtons();
         
         if (!this.isPaused) {
-            this.lastTime = performance.now();
+            this.lastTime = performance.now ? performance.now() : Date.now();
             this.loop();
         }
     },
@@ -223,7 +223,7 @@ const Game = {
     loop() {
         if (!this.isRunning || this.isPaused) return;
         
-        const currentTime = performance.now();
+        const currentTime = performance.now ? performance.now() : Date.now();
         const deltaTime = (currentTime - this.lastTime) / 1000; // Convert to seconds
         this.lastTime = currentTime;
         
@@ -338,7 +338,8 @@ const Game = {
     loadHighScore() {
         const saved = localStorage.getItem('gameHighScore');
         if (saved) {
-            this.highScore = parseInt(saved, 10);
+            const parsed = parseInt(saved, 10);
+            this.highScore = isNaN(parsed) ? 0 : parsed;
             this.updateScore();
         }
     },
