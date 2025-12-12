@@ -36,6 +36,7 @@ const snakeGame = {
         this.spawnFood();
         this.setupControls();
         gamePlatform.updateScore(this.score);
+        this.draw(); // Initial draw
     },
     
     setupControls() {

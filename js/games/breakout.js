@@ -42,6 +42,7 @@ const breakoutGame = {
         this.score = 0;
         this.setupControls();
         gamePlatform.updateScore(this.score);
+        this.draw(); // Initial draw
     },
     
     initBricks() {
