@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavaScript Game Platform</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎮 JavaScript Game Platform</h1>
+            <p class="subtitle">Choose a game to play</p>
+        </header>
+
+        <div id="menu" class="menu">
+            <div class="game-grid">
+                <div class="game-card" data-game="snake">
+                    <div class="game-icon">🐍</div>
+                    <h3>Snake</h3>
+                    <p>Classic snake game - eat food and grow!</p>
+                    <button onclick="gamePlatform.startGame('snake')">Play</button>
+                </div>
+                <div class="game-card" data-game="pong">
+                    <div class="game-icon">🏓</div>
+                    <h3>Pong</h3>
+                    <p>Retro arcade classic - keep the ball in play!</p>
+                    <button onclick="gamePlatform.startGame('pong')">Play</button>
+                </div>
+                <div class="game-card" data-game="breakout">
+                    <div class="game-icon">🧱</div>
+                    <h3>Breakout</h3>
+                    <p>Break all the bricks with your paddle!</p>
+                    <button onclick="gamePlatform.startGame('breakout')">Play</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="game-container" class="game-container" style="display: none;">
+            <div class="game-header">
+                <button id="back-button" onclick="gamePlatform.returnToMenu()">← Back to Menu</button>
+                <h2 id="game-title"></h2>
+                <div id="game-score" class="score">Score: <span id="score-value">0</span></div>
+            </div>
+            <canvas id="game-canvas"></canvas>
+            <div id="game-controls" class="game-controls">
+                <p id="controls-text"></p>
+            </div>
+            <div id="game-over" class="game-over" style="display: none;">
+                <h2>Game Over!</h2>
+                <p>Final Score: <span id="final-score">0</span></p>
+                <button onclick="gamePlatform.restartGame()">Play Again</button>
+                <button onclick="gamePlatform.returnToMenu()">Back to Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/gamePlatform.js"></script>
+    <script src="js/games/snake.js"></script>
+    <script src="js/games/pong.js"></script>
+    <script src="js/games/breakout.js"></script>
+    <script>
+        // Initialize the game platform
+        gamePlatform.init();
+    </script>
+</body>
+</html>
