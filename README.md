@@ -2,6 +2,15 @@
 
 A minimal, extensible browser-based game platform starter template built with vanilla JavaScript. This template provides a clean foundation for building 2D games without any pre-built game logic, allowing you to start developing immediately.
 
+## 🌊 NEW: 3D Underwater Environment
+
+An immersive 3D underwater scene built with Three.js featuring:
+- **Rocky ocean floor terrain** with procedural generation
+- **First-person POV controls** (WASD/Arrow keys + mouse look)
+- **Underwater atmosphere** with fog, lighting, and floating particles
+- **Fully customizable** - regenerate terrain, toggle effects, adjust parameters
+- **Open `underwater.html`** to explore the underwater world!
+
 ## 🎮 Features
 
 - **Clean HTML5 Structure**: Semantic markup with canvas element and UI controls
@@ -48,13 +57,16 @@ This template uses vanilla JavaScript and requires no build tools, bundlers, or 
 
 ```
 Depth_559project/
-├── index.html          # Main HTML file with canvas and UI
+├── index.html          # Main HTML file with 2D canvas and UI
+├── underwater.html     # 3D underwater environment (NEW!)
 ├── css/
-│   └── style.css      # Styling for layout, canvas, and UI elements
+│   ├── style.css           # Styling for 2D game platform
+│   └── underwater-style.css # Styling for 3D underwater scene (NEW!)
 ├── js/
-│   ├── game.js        # Main game framework and loop
-│   └── utils.js       # Utility functions and helpers
-└── README.md          # This file
+│   ├── game.js         # Main 2D game framework and loop
+│   ├── utils.js        # Utility functions and helpers
+│   └── underwater.js   # 3D underwater scene with Three.js (NEW!)
+└── README.md           # This file
 ```
 
 ## 🎯 How to Build Your Game
@@ -226,6 +238,98 @@ Feel free to fork this template and customize it for your needs. If you build so
 ## 📄 License
 
 This is a starter template - use it however you like! No attribution required.
+
+---
+
+## 🌊 3D Underwater Environment Guide
+
+### Overview
+
+The underwater environment (`underwater.html`) is a fully immersive 3D scene built with Three.js that showcases:
+- Procedurally generated rocky ocean floor terrain
+- First-person camera controls for exploring the underwater world
+- Realistic underwater effects (fog, lighting, particles)
+- Interactive UI for customization
+
+### Getting Started
+
+1. Open `underwater.html` in a web browser (local server recommended)
+2. Click anywhere on the screen to enable mouse controls
+3. Use WASD or Arrow keys to move around
+4. Move your mouse to look around (first-person POV)
+5. Use Space to swim up, Shift to swim down
+
+### Customization
+
+The underwater environment is highly customizable through the `CONFIG` object in `js/underwater.js`:
+
+```javascript
+const CONFIG = {
+    terrain: {
+        width: 200,          // Terrain width
+        depth: 200,          // Terrain depth
+        segments: 100,       // Mesh detail (higher = smoother)
+        heightScale: 15,     // Terrain height variation
+        rockiness: 0.8,      // 0-1, controls how rocky the terrain is
+    },
+    fog: {
+        enabled: true,
+        color: 0x001a33,     // Underwater blue color
+        near: 10,
+        far: 150,
+    },
+    lighting: {
+        ambientIntensity: 0.4,
+        directionalIntensity: 0.8,
+        directionalColor: 0x4dd0e1,  // Cyan underwater light
+    },
+};
+```
+
+### Interactive Controls
+
+The UI provides buttons to customize the scene in real-time:
+- **Toggle Fog**: Enable/disable underwater fog effect
+- **Toggle Lighting**: Turn lights on/off to see the effect
+- **Regenerate Terrain**: Create a new random rocky ocean floor
+
+### Advanced Customization
+
+To further customize the underwater scene:
+
+1. **Terrain Shape**: Modify the `noise()` function in `js/underwater.js` to change terrain generation
+2. **Add Objects**: Use `addRocks()` as a template to add new underwater objects (coral, shipwrecks, etc.)
+3. **Colors**: Adjust material colors in `createTerrain()` and lighting colors in `setupLighting()`
+4. **Particles**: Modify `addParticles()` to change the underwater debris/plankton effect
+5. **Water Effect**: Adjust fog density and color for different water clarity
+
+### Technical Details
+
+- **Three.js Version**: r128 (loaded from CDN)
+- **Terrain Generation**: Multi-octave noise for natural-looking rocky formations
+- **Camera System**: First-person with Euler angle rotation for POV control
+- **Performance**: ~1000 particles, 30 rocks, 100x100 terrain segments
+- **Browser Support**: Modern browsers with WebGL support
+
+### Code Structure
+
+The `underwater.js` file is organized into clear sections:
+- Configuration object for easy parameter adjustment
+- Initialization (`init()`) sets up scene, camera, renderer
+- Terrain generation (`createTerrain()`) with procedural noise
+- Lighting setup (`setupLighting()`) for underwater atmosphere
+- Control handlers (`setupControls()`) for movement and POV
+- Animation loop (`animate()`) for rendering and updates
+
+### Tips for Development
+
+1. **Adjust Terrain**: Change `CONFIG.terrain.rockiness` for different ocean floor types
+2. **Performance**: Reduce `segments` if the scene runs slowly
+3. **Visibility**: Adjust fog `near` and `far` values for water clarity
+4. **Movement Speed**: Modify `CONFIG.movement.speed` and `lookSpeed` for different feel
+5. **Add Features**: Use the existing code as a foundation to add submarines, fish, etc.
+
+---
 
 ## 🐛 Troubleshooting
 
