@@ -411,12 +411,26 @@ function setupUIControls() {
             oldTerrain.material.dispose();
         }
         
+        // Remove old rocks
+        const rocksToRemove = [];
+        scene.children.forEach(child => {
+            if (child.geometry && child.geometry.type === 'DodecahedronGeometry') {
+                rocksToRemove.push(child);
+            }
+        });
+        rocksToRemove.forEach(rock => {
+            scene.remove(rock);
+            rock.geometry.dispose();
+            rock.material.dispose();
+        });
+        
         // Randomize terrain parameters
         CONFIG.terrain.heightScale = Math.random() * 20 + 10;
         CONFIG.terrain.rockiness = Math.random() * 0.5 + 0.5;
         
-        // Create new terrain
+        // Create new terrain and rocks
         createTerrain();
+        addRocks();
     });
 }
 
@@ -452,9 +466,10 @@ function updateMovement(delta) {
         velocity.y += direction.y * CONFIG.movement.speed * delta;
     }
     
-    camera.translateX(velocity.x);
-    camera.translateY(velocity.y);
-    camera.translateZ(velocity.z);
+    // Apply movement in camera space
+    camera.position.z += velocity.z * Math.cos(euler.y) - velocity.x * Math.sin(euler.y);
+    camera.position.x += velocity.z * Math.sin(euler.y) + velocity.x * Math.cos(euler.y);
+    camera.position.y += velocity.y;
 }
 
 /**

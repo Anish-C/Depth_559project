@@ -72,18 +72,6 @@ canvas {
     transform: translateY(0);
 }
 
-/* Instructions fade out after 5 seconds */
-#info.fade {
-    animation: fadeOut 1s ease-in-out forwards;
-    animation-delay: 5s;
-}
-
-@keyframes fadeOut {
-    to {
-        opacity: 0.3;
-    }
-}
-
 /* Responsive design */
 @media (max-width: 768px) {
     #info {
@@ -106,30 +94,4 @@ canvas {
         padding: 8px 12px;
         font-size: 0.8rem;
     }
-}
-
-/* Loading indicator */
-#loading {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-size: 1.5rem;
-    z-index: 1000;
-}
-
-.spinner {
-    border: 4px solid rgba(255, 255, 255, 0.3);
-    border-top: 4px solid #4dd0e1;
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    animation: spin 1s linear infinite;
-    margin: 20px auto;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
 }
