@@ -9,10 +9,10 @@ An immersive 3D underwater scene built with Three.js featuring:
 - **First-person POV controls** (WASD/Arrow keys + mouse look)
 - **Underwater atmosphere** with fog, lighting, and floating particles
 - **Fully customizable** - regenerate terrain, toggle effects, adjust parameters
-- **Open `underwater.html`** to explore the underwater world!
 
 ## 🎮 Features
 
+**2D Game Framework:**
 - **Clean HTML5 Structure**: Semantic markup with canvas element and UI controls
 - **Responsive Design**: Mobile-friendly layout that works on all screen sizes
 - **Game Loop Framework**: Built-in `requestAnimationFrame` game loop with delta time
@@ -22,9 +22,16 @@ An immersive 3D underwater scene built with Three.js featuring:
 - **CSS Variables**: Easy theming with CSS custom properties
 - **Well-Commented**: Clear documentation explaining where to add your game logic
 
+**3D Underwater World:**
+- Procedural rocky terrain generation
+- First-person exploration with mouse look controls
+- Underwater lighting and atmospheric effects
+- Interactive customization controls
+- Built with Three.js
+
 ## 🚀 Quick Start
 
-### Running the Game
+### Running the Platform
 
 1. Clone this repository:
    ```bash
@@ -33,7 +40,7 @@ An immersive 3D underwater scene built with Three.js featuring:
    ```
 
 2. Open `index.html` in your web browser:
-   - **Option 1**: Double-click `index.html`
+   - **Option 1**: Double-click `index.html` to see the main hub page
    - **Option 2**: Use a local server (recommended):
      ```bash
      # Using Python 3
@@ -47,7 +54,9 @@ An immersive 3D underwater scene built with Three.js featuring:
      ```
    - **Option 3**: Use VS Code's Live Server extension
 
-3. The game platform will load and display a canvas with control buttons
+3. From the hub page, choose:
+   - **2D Game Framework** - Build canvas-based 2D games
+   - **3D Underwater World** - Explore the immersive underwater environment
 
 ### No Build Step Required!
 
@@ -57,15 +66,16 @@ This template uses vanilla JavaScript and requires no build tools, bundlers, or 
 
 ```
 Depth_559project/
-├── index.html          # Main HTML file with 2D canvas and UI
-├── underwater.html     # 3D underwater environment (NEW!)
+├── index.html              # Main hub/landing page (NEW!)
+├── game-platform.html      # 2D game framework with canvas
+├── underwater.html         # 3D underwater environment
 ├── css/
 │   ├── style.css           # Styling for 2D game platform
-│   └── underwater-style.css # Styling for 3D underwater scene (NEW!)
+│   └── underwater-style.css # Styling for 3D underwater scene
 ├── js/
 │   ├── game.js         # Main 2D game framework and loop
 │   ├── utils.js        # Utility functions and helpers
-│   └── underwater.js   # 3D underwater scene with Three.js (NEW!)
+│   └── underwater.js   # 3D underwater scene with Three.js
 └── README.md           # This file
 ```
 

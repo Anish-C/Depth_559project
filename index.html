@@ -3,46 +3,221 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Browser-based game platform starter template">
-    <title>Game Platform</title>
-    <link rel="stylesheet" href="css/style.css">
+    <meta name="description" content="Game Platform - 2D Framework and 3D Underwater Environment">
+    <title>Game Platform Hub</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 50px;
+        }
+
+        header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .project-card {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }
+
+        .project-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .project-header {
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .project-header.underwater {
+            background: linear-gradient(135deg, #0097a7 0%, #00bcd4 100%);
+        }
+
+        .project-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .project-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+        }
+
+        .project-header p {
+            opacity: 0.9;
+            font-size: 0.95rem;
+        }
+
+        .project-body {
+            padding: 30px;
+        }
+
+        .features {
+            list-style: none;
+            margin-bottom: 20px;
+        }
+
+        .features li {
+            padding: 8px 0;
+            color: #555;
+            display: flex;
+            align-items: center;
+        }
+
+        .features li::before {
+            content: "✓";
+            color: #667eea;
+            font-weight: bold;
+            margin-right: 10px;
+            font-size: 1.2rem;
+        }
+
+        .project-card.underwater .features li::before {
+            color: #00bcd4;
+        }
+
+        .project-link {
+            display: inline-block;
+            width: 100%;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .project-card.underwater .project-link {
+            background: linear-gradient(135deg, #0097a7 0%, #00bcd4 100%);
+        }
+
+        .project-link:hover {
+            opacity: 0.9;
+            transform: scale(1.05);
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            margin-top: 50px;
+            opacity: 0.8;
+        }
+
+        footer a {
+            color: white;
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2rem;
+            }
+
+            header p {
+                font-size: 1rem;
+            }
+
+            .projects-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Game Platform</h1>
-            <p class="subtitle">Start building your game here!</p>
+            <h1>🎮 Game Platform</h1>
+            <p>Choose your adventure: Build 2D games or explore the underwater world</p>
         </header>
 
-        <main class="game-container">
-            <div class="score-panel">
-                <div class="score-item">
-                    <span class="score-label">Score:</span>
-                    <span id="score" class="score-value">0</span>
+        <div class="projects-grid">
+            <!-- 2D Game Platform -->
+            <div class="project-card">
+                <div class="project-header">
+                    <div class="project-icon">🎨</div>
+                    <h2>2D Game Framework</h2>
+                    <p>Canvas-based game development starter</p>
                 </div>
-                <div class="score-item">
-                    <span class="score-label">High Score:</span>
-                    <span id="highScore" class="score-value">0</span>
+                <div class="project-body">
+                    <ul class="features">
+                        <li>RequestAnimationFrame game loop</li>
+                        <li>Keyboard, mouse, and touch input</li>
+                        <li>Score management with localStorage</li>
+                        <li>Utility functions and helpers</li>
+                        <li>Responsive design</li>
+                    </ul>
+                    <a href="game-platform.html" class="project-link">Launch 2D Platform →</a>
                 </div>
             </div>
 
-            <div class="canvas-wrapper">
-                <canvas id="gameCanvas" width="800" height="600"></canvas>
+            <!-- 3D Underwater Environment -->
+            <div class="project-card underwater">
+                <div class="project-header underwater">
+                    <div class="project-icon">🌊</div>
+                    <h2>3D Underwater World</h2>
+                    <p>Immersive ocean floor exploration</p>
+                </div>
+                <div class="project-body">
+                    <ul class="features">
+                        <li>Rocky procedural terrain</li>
+                        <li>First-person POV controls</li>
+                        <li>Underwater lighting & fog</li>
+                        <li>Floating particle effects</li>
+                        <li>Real-time customization</li>
+                    </ul>
+                    <a href="underwater.html" class="project-link">Dive Into 3D World →</a>
+                </div>
             </div>
-
-            <div class="controls">
-                <button id="startBtn" class="btn btn-primary">Start Game</button>
-                <button id="pauseBtn" class="btn btn-secondary">Pause</button>
-                <button id="resetBtn" class="btn btn-secondary">Reset</button>
-            </div>
-        </main>
+        </div>
 
         <footer>
-            <p>Use arrow keys or WASD to move | Click on canvas to interact</p>
+            <p>Built with vanilla JavaScript and Three.js | <a href="README.md" target="_blank">View Documentation</a></p>
         </footer>
     </div>
-
-    <script src="js/utils.js"></script>
-    <script src="js/game.js"></script>
 </body>
 </html>
