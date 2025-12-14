@@ -19,6 +19,9 @@ let started = false;
 let chosenMode = null; // "prototype" | "full"
 let moveStunUntil = 0;
 
+let gameOver = false;
+let gameOverText = "";
+
 console.log("THREE REV", THREE.REVISION);
 
 let sharkManager;
@@ -54,16 +57,17 @@ const projectileGeo = new THREE.SphereGeometry(0.10, 10, 8);
 
 // STEVE collision obstacle for player
 let steveObstacle = null;
-let allObstacles = null;
+let allObstacles = []; // for sharks/crawler
 
-// Tools + beam
-let toolModels = null;
-let lastTool = null;
-let repairBeam = null;
-let repairBeamEnd = null;
+// Tool models
+let toolModels;
+let repairBeam, repairBeamEnd;
+
+// Temps
 const _tmpA = new THREE.Vector3();
 const _tmpB = new THREE.Vector3();
 const _tmpC = new THREE.Vector3();
+const _tmpPlayerPos = new THREE.Vector3();
 
 function init() {
   renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -80,14 +84,22 @@ function init() {
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
   scene.add(camera);
 
-  world = buildWorld(scene);
+  // World is built after the user chooses Prototype vs Full.
+  scene.background = new THREE.Color(0x04131a);
+  scene.fog = new THREE.FogExp2(0x04131a, 0.012);
+  scene.add(new THREE.AmbientLight(0x3b6b80, 1.0));
 
-  // Flashlight
-  flashlight = new THREE.SpotLight(0xe9f6ff, 10.0, 220, Math.PI / 6, 0.25, 0.6);
+  world = null;
+
+  // Flashlight (always on)
+  flashlight = new THREE.SpotLight(0xcfeaff, 4.0, 160, Math.PI * 0.18, 0.35, 1.0);
   flashlight.castShadow = false;
+  flashlight.penumbra = 0.45;
+  flashlight.position.copy(camera.position);
   scene.add(flashlight);
 
   flashlightTarget = new THREE.Object3D();
+  flashlightTarget.position.set(0, 0, -1);
   scene.add(flashlightTarget);
   flashlight.target = flashlightTarget;
 
@@ -107,8 +119,7 @@ function init() {
   window.addEventListener("resize", onResize);
 
   renderer.domElement.addEventListener("click", () => {
-    if (!started) return;
-    if (input.requestPointerLock) input.requestPointerLock();
+    if (!input.isPointerLocked && started && !gameOver) input.requestPointerLock();
   });
 
   setupModeMenu();
@@ -154,47 +165,35 @@ function setupModeMenu() {
 
   const row = document.createElement("div");
   row.style.display = "flex";
-  row.style.flexDirection = "row";
-  row.style.alignItems = "center";
-  row.style.justifyContent = "center";
-  row.style.gap = "16px";
+  row.style.gap = "14px";
   overlay.appendChild(row);
 
-  const fullBtn = document.createElement("button");
-  fullBtn.id = "startBtn"; // keep ID for existing CSS
-  fullBtn.className = templateClass;
-  fullBtn.textContent = "Full";
+  const btnProto = document.createElement("button");
+  btnProto.textContent = "Prototype";
+  btnProto.className = templateClass;
+  btnProto.style.minWidth = "140px";
+  btnProto.onclick = () => startGame("prototype");
+  row.appendChild(btnProto);
 
-  const protoBtn = document.createElement("button");
-  protoBtn.id = "protoBtn";
-  protoBtn.className = templateClass;
-  protoBtn.textContent = "Prototype";
+  const btnFull = document.createElement("button");
+  btnFull.textContent = "Full";
+  btnFull.className = templateClass;
+  btnFull.style.minWidth = "140px";
+  btnFull.onclick = () => startGame("full");
+  row.appendChild(btnFull);
 
-  // Force equal sizing so "Prototype" isn't tiny
-  for (const b of [fullBtn, protoBtn]) {
-    b.style.minWidth = "180px";
-    b.style.padding = "14px 22px";
-    b.style.fontSize = "18px";
-    b.style.cursor = "pointer";
-  }
-
-  fullBtn.addEventListener("click", () => startGame("full"));
-  protoBtn.addEventListener("click", () => startGame("prototype"));
-
-  row.appendChild(protoBtn);
-  row.appendChild(fullBtn);
+  const hint = document.createElement("div");
+  hint.textContent = "Keyboard: P = Prototype, F/Enter = Full";
+  hint.style.opacity = "0.8";
+  hint.style.fontSize = "14px";
+  overlay.appendChild(hint);
 }
 
 function hideOverlay() {
   if (!overlay) return;
-
-  // Don’t rely on CSS classes overriding inline styles
   overlay.classList.add("hidden");
   overlay.style.display = "none";
   overlay.style.pointerEvents = "none";
-
-  // Optional: remove buttons so they can’t linger visually due to CSS/layout quirks
-  overlay.innerHTML = "";
 }
 
 function startGame(mode) {
@@ -202,16 +201,54 @@ function startGame(mode) {
 
   chosenMode = mode === "prototype" ? "prototype" : "full";
 
+  world = buildWorld(scene, chosenMode);
+
   crawler = new Crawler(scene, makeWaypoints(), { visualMode: chosenMode });
 
   const steveR = crawler.collisionRadius ?? crawler.radius;
   steveObstacle = { center: crawler.position, radius: steveR };
-  allObstacles = world.obstacles.concat([steveObstacle]);
+  allObstacles = (world?.obstacles || []).concat([steveObstacle]);
 
   sharkManager = new SharkManager(scene, { visualMode: chosenMode });
 
   hideOverlay();
   started = true;
+}
+
+function endGame(text) {
+  if (gameOver) return;
+  gameOver = true;
+  gameOverText = text || "Game Over";
+
+  // Stop input drift
+  input.consumeMouseDelta();
+  input.consumeMouseButtons();
+
+  // Show overlay
+  if (overlay) {
+    overlay.classList.remove("hidden");
+    overlay.style.display = "flex";
+    overlay.style.pointerEvents = "auto";
+    overlay.innerHTML = "";
+
+    overlay.style.flexDirection = "column";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.gap = "14px";
+
+    const title = document.createElement("div");
+    title.textContent = gameOverText;
+    title.style.fontSize = "34px";
+    title.style.fontWeight = "700";
+    title.style.letterSpacing = "0.6px";
+    overlay.appendChild(title);
+
+    const sub = document.createElement("div");
+    sub.textContent = "Refresh to play again";
+    sub.style.opacity = "0.85";
+    sub.style.fontSize = "16px";
+    overlay.appendChild(sub);
+  }
 }
 
 function onResize() {
@@ -220,226 +257,100 @@ function onResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-function spawnImpact(point) {
+function spawnImpact(p) {
   const m = new THREE.Mesh(impactGeo, impactMat);
-  m.position.copy(point);
+  m.position.copy(p);
+  m.userData.t = 0;
   scene.add(m);
-  impacts.push({ mesh: m, t: 0 });
+  impacts.push(m);
 }
 
 function updateImpacts(dt) {
   for (let i = impacts.length - 1; i >= 0; i--) {
-    impacts[i].t += dt;
-    if (impacts[i].t > 0.35) {
-      scene.remove(impacts[i].mesh);
+    const m = impacts[i];
+    m.userData.t += dt;
+    m.scale.setScalar(1.0 + m.userData.t * 3.0);
+    if (m.userData.t > 0.18) {
+      scene.remove(m);
       impacts.splice(i, 1);
     }
   }
 }
 
-function spawnHarpoonProjectile(muzzleWorld, hitWorld) {
-  const mesh = new THREE.Mesh(projectileGeo, projectileMat);
-  mesh.position.copy(muzzleWorld);
-  scene.add(mesh);
-
-  projectiles.push({
-    mesh,
-    start: muzzleWorld.clone(),
-    end: hitWorld.clone(),
-    t: 0,
-    duration: 0.10,
-  });
+function spawnProjectile(start, dir) {
+  const p = new THREE.Mesh(projectileGeo, projectileMat);
+  p.position.copy(start);
+  p.userData.vel = dir.clone().multiplyScalar(120);
+  p.userData.t = 0;
+  scene.add(p);
+  projectiles.push(p);
 }
 
 function updateProjectiles(dt) {
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const p = projectiles[i];
-    p.t += dt;
-    const a = Math.min(1, p.t / p.duration);
-    const s = a * a * (3 - 2 * a);
-    p.mesh.position.lerpVectors(p.start, p.end, s);
-
-    if (a >= 1) {
-      scene.remove(p.mesh);
+    p.userData.t += dt;
+    p.position.addScaledVector(p.userData.vel, dt);
+    if (p.userData.t > 0.22) {
+      scene.remove(p);
       projectiles.splice(i, 1);
     }
   }
 }
 
-function isDescendantOf(obj, ancestor) {
-  let cur = obj;
-  while (cur) {
-    if (cur === ancestor) return true;
-    cur = cur.parent;
-  }
-  return false;
-}
+function createToolModels(camera) {
+  const g = new THREE.Group();
+  camera.add(g);
 
-function findSharkFromHitObject(obj) {
-  let cur = obj;
-  while (cur) {
-    if (cur.userData && cur.userData.shark) return cur.userData.shark;
-    cur = cur.parent;
-  }
-  return null;
-}
-
-function fireHarpoon(nowS) {
-  if (nowS < nextHarpoonTime) return;
-  nextHarpoonTime = nowS + harpoonCooldown;
-
-  raycaster.setFromCamera({ x: 0, y: 0 }, camera);
-  raycaster.far = harpoonRange;
-
-  const targets = world.raycastMeshes.concat(sharkManager.getRaycastTargets());
-  const hits = raycaster.intersectObjects(targets, true);
-
-  const filtered = hits.filter((h) => !isDescendantOf(h.object, crawler.group));
-
-  let hitPoint;
-  let hitObj = null;
-
-  if (filtered.length > 0) {
-    hitPoint = filtered[0].point.clone();
-    hitObj = filtered[0].object;
-    spawnImpact(hitPoint);
-  } else {
-    camera.getWorldDirection(_dir);
-    hitPoint = camera.position.clone().addScaledVector(_dir, 45);
-    spawnImpact(hitPoint);
-  }
-
-  const muzzleWorld = toolModels.harpoonMuzzle.getWorldPosition(new THREE.Vector3());
-  spawnHarpoonProjectile(muzzleWorld, hitPoint);
-
-  if (hitObj) {
-    const shark = findSharkFromHitObject(hitObj);
-    if (shark) shark.takeDamage(harpoonDamage);
-  }
-}
-
-function createRepairBeam(scene) {
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
-
-  const mat = new THREE.LineBasicMaterial({
-    color: 0x88ccff,
-    transparent: true,
-    opacity: 0.85,
-  });
-
-  const line = new THREE.Line(geo, mat);
-  line.visible = false;
-  scene.add(line);
-
-  const endGlow = new THREE.Mesh(
-    new THREE.SphereGeometry(0.10, 10, 8),
-    new THREE.MeshBasicMaterial({ color: 0xbfe9ff, transparent: true, opacity: 0.9 })
-  );
-  endGlow.visible = false;
-  scene.add(endGlow);
-
-  return { beam: line, endGlow };
-}
-
-function setBeam(startWorld, endWorld) {
-  const attr = repairBeam.geometry.getAttribute("position");
-  const a = attr.array;
-  a[0] = startWorld.x; a[1] = startWorld.y; a[2] = startWorld.z;
-  a[3] = endWorld.x;   a[4] = endWorld.y;   a[5] = endWorld.z;
-  attr.needsUpdate = true;
-  repairBeamEnd.position.copy(endWorld);
-}
-
-// your existing createToolModels() unchanged:
-function createToolModels(cam) {
-  const root = new THREE.Group();
-  cam.add(root);
-
-  const gunMat = new THREE.MeshBasicMaterial({ color: 0x1b2a30 }); gunMat.fog = false;
-  const metalMat = new THREE.MeshBasicMaterial({ color: 0x33444b }); metalMat.fog = false;
-  const glowMat = new THREE.MeshBasicMaterial({ color: 0x88ccff }); glowMat.fog = false;
-  const handMat = new THREE.MeshBasicMaterial({ color: 0x0f1619 }); handMat.fog = false;
-
-  function cylAlongZ(rTop, rBot, len, mat) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, len, 14), mat);
-    m.rotation.x = Math.PI / 2;
-    return m;
-  }
-
+  // Harpoon
   const harpoon = new THREE.Group();
-  harpoon.position.set(0.40, -0.58, -0.98);
-  harpoon.rotation.set(0.05, 0.18, 0.0);
-  harpoon.scale.setScalar(1.02);
+  g.add(harpoon);
 
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.44), gunMat);
-  body.position.set(0.00, 0.00, 0.10);
+  const gunMat = new THREE.MeshStandardMaterial({ color: 0x2d3338, roughness: 0.7, metalness: 0.3 });
+  const accentMat = new THREE.MeshStandardMaterial({ color: 0x9aa4ab, roughness: 0.5, metalness: 0.6 });
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.15, 0.55), gunMat);
+  body.position.set(0.20, -0.18, -0.55);
   harpoon.add(body);
 
-  const barrelLen = 0.80;
-  const barrel = cylAlongZ(0.035, 0.035, barrelLen, metalMat);
-  barrel.position.set(0.00, 0.03, -0.18);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.55, 12), accentMat);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0.20, -0.15, -0.85);
   harpoon.add(barrel);
 
-  const prongLen = 0.18;
-  const barrelFrontZ = barrel.position.z - barrelLen / 2;
-  for (let i = -1; i <= 1; i++) {
-    const pr = cylAlongZ(0.012, 0.012, prongLen, metalMat);
-    pr.position.set(i * 0.020, 0.03, barrelFrontZ - prongLen / 2);
-    harpoon.add(pr);
-  }
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(0.20, -0.15, -1.12);
+  harpoon.add(muzzle);
 
-  const coil = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 10, 18), glowMat);
-  coil.position.set(-0.03, 0.09, 0.22);
-  harpoon.add(coil);
-
-  const rHand = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.11, 0.14), handMat);
-  rHand.position.set(-0.10, -0.12, 0.18);
-  harpoon.add(rHand);
-
-  const harpoonMuzzle = new THREE.Object3D();
-  harpoonMuzzle.position.set(0.00, 0.03, barrelFrontZ - 0.02);
-  harpoon.add(harpoonMuzzle);
-
-  root.add(harpoon);
-
+  // Repair tool
   const repair = new THREE.Group();
-  repair.position.set(-0.40, -0.60, -0.98);
-  repair.rotation.set(0.05, -0.16, 0.0);
-  repair.scale.setScalar(1.02);
+  g.add(repair);
 
-  const rBody = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.11, 0.38), gunMat);
-  rBody.position.set(0.00, 0.00, 0.12);
+  const rBody = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.45), gunMat);
+  rBody.position.set(0.16, -0.18, -0.52);
   repair.add(rBody);
 
-  const nozzleLen = 0.70;
-  const nozzle = cylAlongZ(0.03, 0.03, nozzleLen, metalMat);
-  nozzle.position.set(0.00, 0.03, -0.22);
-  repair.add(nozzle);
-
-  const tipRadius = 0.05;
-  const nozzleFrontZ = nozzle.position.z - nozzleLen / 2;
-  const tip = new THREE.Mesh(new THREE.SphereGeometry(tipRadius, 12, 10), glowMat);
-  tip.position.set(0.00, 0.03, nozzleFrontZ - tipRadius * 0.95);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.20, 12), accentMat);
+  tip.rotation.x = -Math.PI / 2;
+  tip.position.set(0.16, -0.15, -0.80);
   repair.add(tip);
 
-  const lHand = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.11, 0.14), handMat);
-  lHand.position.set(-0.12, -0.12, 0.20);
-  repair.add(lHand);
-
   const repairTip = new THREE.Object3D();
-  repairTip.position.copy(tip.position);
+  repairTip.position.set(0.16, -0.15, -0.92);
   repair.add(repairTip);
 
-  root.add(repair);
+  // Placement
+  g.position.set(0.0, 0.0, 0.0);
 
+  // Default: harpoon visible
   harpoon.visible = true;
   repair.visible = false;
 
   return {
+    group: g,
     harpoon,
     repair,
-    harpoonMuzzle,
+    harpoonMuzzle: muzzle,
     repairTip,
     setTool(tool) {
       harpoon.visible = (tool === Tool.HARPOON);
@@ -447,6 +358,30 @@ function createToolModels(cam) {
     }
   };
 }
+
+function createRepairBeam(scene) {
+  const mat = new THREE.LineBasicMaterial({ color: 0xbfe9ff, transparent: true, opacity: 0.75 });
+  const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  const beam = new THREE.Line(geo, mat);
+  beam.visible = false;
+  scene.add(beam);
+
+  const endGlow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.12, 12, 10),
+    new THREE.MeshBasicMaterial({ color: 0xbfe9ff, transparent: true, opacity: 0.8 })
+  );
+  endGlow.visible = false;
+  scene.add(endGlow);
+
+  return { beam, endGlow };
+}
+
+function setBeam(start, end) {
+  repairBeam.geometry.setFromPoints([start, end]);
+  repairBeamEnd.position.copy(end);
+}
+
+let lastTool = null;
 
 let lastT = performance.now();
 function animate() {
@@ -464,6 +399,12 @@ function animate() {
     return;
   }
 
+  if (gameOver) {
+    // Freeze the game on win/lose
+    renderer.render(scene, camera);
+    return;
+  }
+
   try {
     const { leftPressed, leftDown } = input.consumeMouseButtons();
 
@@ -475,7 +416,7 @@ function animate() {
     const repairing = canRepair && leftDown;
 
     const sharkObstacles = sharkManager.getObstacleSpheres();
-    const allObsNow = world.obstacles.concat([steveObstacle], sharkObstacles);
+    const allObsNow = (world.playerObstacles || []).concat([steveObstacle], sharkObstacles);
 
     const beforePos = camera.position.clone();
     player.update(dt, allObsNow, repairing);
@@ -488,13 +429,38 @@ function animate() {
 
     crawler.update(dt, world.obstacles);
 
+    // Harpoon
     if (player.tool === Tool.HARPOON && leftPressed) {
-      fireHarpoon(nowS);
-    }
-    if (player.tool === Tool.REPAIR && repairing) {
-      crawler.repair(repairRate * dt);
+      if (nowS >= nextHarpoonTime) {
+        nextHarpoonTime = nowS + harpoonCooldown;
+
+        const start = toolModels.harpoonMuzzle.getWorldPosition(_tmpA);
+        camera.getWorldDirection(_dir);
+
+        spawnProjectile(start, _dir);
+
+        raycaster.set(start, _dir);
+        raycaster.far = harpoonRange;
+
+        const candidates = (world.raycastMeshes || []);
+        const hits = raycaster.intersectObjects(candidates, true);
+
+        if (hits.length) {
+          const hit = hits[0];
+          spawnImpact(hit.point);
+        }
+
+        // Damage sharks via manager (hitscan in direction)
+        sharkManager.harpoonHitscan(start, _dir, harpoonRange, harpoonDamage);
+      }
     }
 
+    // Repair
+    if (player.tool === Tool.REPAIR && repairing) {
+      crawler.heal(repairRate * dt);
+    }
+
+    // Repair beam visuals
     if (player.tool === Tool.REPAIR && repairing) {
       const start = toolModels.repairTip.getWorldPosition(_tmpA);
 
@@ -513,7 +479,7 @@ function animate() {
     }
 
     sharkManager.update(dt, nowS, {
-      playerPos: camera.position,
+      playerPos: player.getTargetPosition(_tmpPlayerPos),
       playerHitRadius: 2.2,
       damagePlayer: (amt) => {
         playerHP = Math.max(0, playerHP - amt);
@@ -527,10 +493,18 @@ function animate() {
     updateImpacts(dt);
     updateProjectiles(dt);
 
+    // Flashlight always on and aims with camera
     flashlight.position.copy(camera.position);
     camera.getWorldDirection(_dir);
     flashlightTarget.position.copy(camera.position).addScaledVector(_dir, 40);
     flashlightFill.position.copy(camera.position).addScaledVector(_dir, 2.0);
+
+    // Win/Lose evaluation
+    if (playerHP <= 0 || crawler.hp <= 0) {
+      endGame("You Lose");
+    } else if (playerHP > 0 && typeof crawler.hasReachedSurface === "function" && crawler.hasReachedSurface()) {
+      endGame("You Win");
+    }
 
     hud.setTool(player.tool === Tool.HARPOON ? "Harpoon" : "Repair");
     hud.setSteveHP(crawler.hp, crawler.maxHP);

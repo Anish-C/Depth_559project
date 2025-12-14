@@ -77,44 +77,23 @@ function faceTowardYawDir(group, dir, dt, turnRate) {
 }
 
 function resolveSphereCollisions(pos, radius, obstacles, yScale) {
-  if (!Array.isArray(obstacles)) {
-    return;
-  }
+    if (!Array.isArray(obstacles)) return;
 
-  let ys = 1.0;
-  if (typeof yScale === "number") {
-    ys = yScale;
-  }
-
-  for (const ob of obstacles) {
-    if (!ob) {
-      continue;
+    for (const ob of obstacles) {
+      if (!ob || !ob.center) continue;
+      const r = (ob.radius || 0) + radius;
+  
+      const dx = pos.x - ob.center.x;
+      const dz = pos.z - ob.center.z;
+      const d2 = dx * dx + dz * dz;
+  
+      if (d2 < r * r && d2 > 1e-10) {
+        const d = Math.sqrt(d2);
+        const push = (r - d) + 1e-3;
+        pos.x += (dx / d) * push;
+        pos.z += (dz / d) * push;
+      }
     }
-    if (!ob.center) {
-      continue;
-    }
-
-    const dx = pos.x - ob.center.x;
-    const dy = (pos.y - ob.center.y) * ys;
-    const dz = pos.z - ob.center.z;
-
-    const r = radius + ob.radius;
-    const d2 = dx * dx + dy * dy + dz * dz;
-
-    if (d2 >= r * r) {
-      continue;
-    }
-
-    const d = Math.sqrt(Math.max(d2, 1e-8));
-    let overlap = r - d;
-
-    // Cap correction so we don't get "teleport" pops if dt spikes or we spawn inside something.
-    if (overlap > 1.25) overlap = 1.25;
-
-    pos.x += (dx / d) * overlap;
-    pos.y += ((dy / d) * overlap) / ys;
-    pos.z += (dz / d) * overlap;
-  }
 }
 
 function pointNearSegment(p, a, b, maxDist) {

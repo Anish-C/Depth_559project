@@ -557,16 +557,6 @@ export class Shark {
 
     this.stateT += dt;
 
-    // passive chip damage if player intersects
-    const mouth = this._mouthWorldPos(_v3);
-    if (targetKind === "PLAYER") {
-      const dM = mouth.distanceTo(playerPos);
-      const bodyHit = pointNearSegment(playerPos, mouth, this.position, this.playerCapsuleRange);
-      if (dM <= this.playerBiteRange || bodyHit) {
-        if (ctx.damagePlayer) ctx.damagePlayer(2);
-      }
-    }
-
     // INTRO
     if (this.state === "INTRO") {
       const t01 = Math.min(1, this.stateT / Math.max(0.001, this.introSeconds));

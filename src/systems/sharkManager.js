@@ -134,6 +134,37 @@ export class SharkManager {
     return this.sharks.map((s) => s.group);
   }
 
+  harpoonHitscan(start, dir, range, damage) {
+    if (!this.sharks || this.sharks.length === 0) return false;
+
+    let best = null;
+    let bestT = Infinity;
+
+    // Ray: P(t) = start + dir * t, t in [0, range]
+    for (const s of this.sharks) {
+      if (!s || s.removable || s.state === "DEAD" || s.hp <= 0) continue;
+
+      const r = (typeof s.hitRadius === "number" ? s.hitRadius : 1.2) * 1.25; // slightly forgiving
+      const toC = _tmpA.subVectors(s.position, start);
+
+      const t = toC.dot(dir);
+      if (t < 0 || t > range) continue;
+
+      const closest = _tmpB.copy(start).addScaledVector(dir, t);
+      const d2 = closest.distanceToSquared(s.position);
+      if (d2 <= r * r && t < bestT) {
+        bestT = t;
+        best = s;
+      }
+    }
+
+    if (best) {
+      best.takeDamage(damage);
+      return true;
+    }
+    return false;
+  }
+
   // 🔧 RESTORED: used by other code to treat sharks as obstacles
   getObstacleSpheres() {
     const out = [];

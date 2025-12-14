@@ -1,111 +1,151 @@
 import * as THREE from "three";
-import { loadGLBScene } from "../engine/assets.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 // === TUNE THESE ===
 const ROBOT_SCALE = 0.02;                 // scale robot down (try 0.02–0.08)
-const ROBOT_YAW_OFFSET = Math.PI / 2;     // if rotated wrong: Math.PI/2, -Math.PI/2, Math.PI, 0
+const ROBOT_YAW_OFFSET = Math.PI / 2;     // tweak if rotated wrong: 0, ±Math.PI/2, Math.PI, Math.PI/2
 
-// Bubble VFX tuning
-// Move Z toward 0 to move bubbles "into" the asset. (Less negative = more inside)
-const BUBBLE_LOCAL_OFFSET = new THREE.Vector3(0, 1.2, -2);
+// Bubble VFX tuning (move this to fit the crawler)
+const BUBBLE_LOCAL_OFFSET = new THREE.Vector3(0, 0.6, -2); // x=left/right, y=up/down, z=forward/back (more - = further back)
 // ==================
+
+// Escape target (tune after merge)
+const FINAL_XZ = new THREE.Vector2(0, -210);
+const SURFACE_Y = 22.0;
+
+const _tmpA = new THREE.Vector3();
+const _tmpB = new THREE.Vector3();
+
+// Dead particles must be moved somewhere invisible (Points draws ALL vertices always)
+const HIDE_X = 0;
+const HIDE_Y = -9999;
+const HIDE_Z = 0;
 
 function wrapAngle(a) {
   while (a > Math.PI) a -= Math.PI * 2;
   while (a < -Math.PI) a += Math.PI * 2;
   return a;
 }
-
 function lerpAngle(a, b, t) {
   const d = wrapAngle(b - a);
   return a + d * t;
 }
 
-function resolveSphereCollisions(pos, radius, obstacles) {
+function resolveSphereCollisionsXZ(pos, radius, obstacles) {
   if (!Array.isArray(obstacles)) return;
 
   for (const ob of obstacles) {
-    if (!ob || !ob.center || typeof ob.radius !== "number") continue;
+    if (!ob || !ob.center) continue;
 
+    const r = (ob.radius || 0) + radius;
     const dx = pos.x - ob.center.x;
-    const dy = pos.y - ob.center.y;
     const dz = pos.z - ob.center.z;
+    const d2 = dx * dx + dz * dz;
 
-    const r = radius + ob.radius;
-    const d2 = dx * dx + dy * dy + dz * dz;
-    if (d2 >= r * r) continue;
-
-    const d = Math.sqrt(Math.max(d2, 1e-8));
-    const overlap = r - d;
-
-    pos.x += (dx / d) * overlap;
-    pos.y += (dy / d) * overlap;
-    pos.z += (dz / d) * overlap;
+    if (d2 < r * r && d2 > 1e-10) {
+      const d = Math.sqrt(d2);
+      const push = (r - d) + 1e-3;
+      pos.x += (dx / d) * push;
+      pos.z += (dz / d) * push;
+    }
   }
 }
 
-function markRecursive(obj, key, value) {
-  obj.traverse((n) => {
-    if (!n.userData) n.userData = {};
-    n.userData[key] = value;
-  });
+async function loadAnyGLTF(urls) {
+  const loader = new GLTFLoader();
+
+  for (const url of urls) {
+    try {
+      const gltf = await new Promise((resolve, reject) => {
+        loader.load(url, resolve, undefined, reject);
+      });
+      return gltf.scene;
+    } catch (e) {
+      console.warn(`[Crawler] Failed to load: ${url}`);
+    }
+  }
+  throw new Error(`[Crawler] All model paths failed:\n${urls.join("\n")}`);
 }
 
-// Fix for "random transparent spots" on some GLBs:
-function forceOpaqueMaterials(root) {
+function forceOpaque(root) {
+  if (!root) return;
   root.traverse((obj) => {
     if (!obj.isMesh) return;
-
     const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
     for (const m of mats) {
       if (!m) continue;
-
       m.transparent = false;
       m.opacity = 1.0;
-      m.alphaTest = 0.0;
-
+      m.alphaTest = 0;
       m.depthWrite = true;
-      m.depthTest = true;
-
       m.needsUpdate = true;
     }
   });
 }
 
 function makeBubbleTexture() {
+  // Soft bubble sprite (not sparkly)
   const size = 64;
   const c = document.createElement("canvas");
   c.width = c.height = size;
   const ctx = c.getContext("2d");
 
+  ctx.clearRect(0, 0, size, size);
+
   const g = ctx.createRadialGradient(
-    size * 0.5,
-    size * 0.5,
-    size * 0.05,
-    size * 0.5,
-    size * 0.5,
-    size * 0.5
+    size * 0.5, size * 0.5, size * 0.08,
+    size * 0.5, size * 0.5, size * 0.5
   );
 
-  g.addColorStop(0.0, "rgba(255,255,255,0.9)");
-  g.addColorStop(0.25, "rgba(255,255,255,0.35)");
-  g.addColorStop(1.0, "rgba(255,255,255,0.0)");
+  g.addColorStop(0.0, "rgba(255,255,255,0.65)");
+  g.addColorStop(0.35, "rgba(255,255,255,0.22)");
+  g.addColorStop(1.0, "rgba(255,255,255,0.00)");
 
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, size, size);
+
+  // faint ring highlight
+  ctx.beginPath();
+  ctx.arc(size * 0.5, size * 0.5, size * 0.22, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255,255,255,0.15)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
 
   const tex = new THREE.CanvasTexture(c);
   tex.needsUpdate = true;
   return tex;
 }
 
+/**
+ * Continuous bubble thruster using Points.
+ *
+ * Key fix for "blob at the back":
+ *   Points renders every vertex all the time.
+ *   If a particle "dies" but you don't move its vertex away, it STILL shows.
+ * So: whenever life <= 0, we shove it to (0, -9999, 0).
+ *
+ * Key fix for "pulsing":
+ *   deterministic emission via accumulator + ring cursor (no random spawn probability).
+ */
 class BubbleEmitter {
-  constructor(count = 220) {
+  constructor(count = 240) {
     this.count = count;
 
     this.positions = new Float32Array(count * 3);
     this.velocities = new Float32Array(count * 3);
     this.life = new Float32Array(count);
+
+    // init all particles hidden
+    for (let i = 0; i < count; i++) {
+      const p3 = i * 3;
+      this.positions[p3 + 0] = HIDE_X;
+      this.positions[p3 + 1] = HIDE_Y;
+      this.positions[p3 + 2] = HIDE_Z;
+      this.velocities[p3 + 0] = 0;
+      this.velocities[p3 + 1] = 0;
+      this.velocities[p3 + 2] = 0;
+      this.life[i] = 0;
+    }
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(this.positions, 3));
@@ -113,76 +153,110 @@ class BubbleEmitter {
     this.material = new THREE.PointsMaterial({
       map: makeBubbleTexture(),
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.78,
       depthWrite: false,
-      size: 0.22,
+      size: 0.17,
       sizeAttenuation: true,
+      blending: THREE.NormalBlending,
+      color: new THREE.Color(0xcfeaff),
     });
 
     this.points = new THREE.Points(geo, this.material);
     this.points.frustumCulled = false;
 
-    for (let i = 0; i < count; i++) this.life[i] = 0;
-
-    this._spawnRate = 18; // particles/sec baseline (scaled by intensity)
+    // emission
+    this._emitRate = 70;   // particles/sec baseline (scaled by intensity)
+    this._emitCarry = 0;
+    this._emitCursor = 0;
   }
 
   setVisible(v) {
-    this.points.visible = v;
+    this.points.visible = !!v;
+  }
+
+  _hide(i) {
+    const p3 = i * 3;
+    this.life[i] = 0;
+    this.positions[p3 + 0] = HIDE_X;
+    this.positions[p3 + 1] = HIDE_Y;
+    this.positions[p3 + 2] = HIDE_Z;
+    this.velocities[p3 + 0] = 0;
+    this.velocities[p3 + 1] = 0;
+    this.velocities[p3 + 2] = 0;
   }
 
   _spawn(i, intensity) {
     const p3 = i * 3;
 
-    const x = (Math.random() - 0.5) * 0.8;
-    const y = (Math.random() - 0.5) * 0.5;
+    // spawn cloud near nozzle (local space)
+    const x = (Math.random() - 0.5) * 0.75;
+    const y = (Math.random() - 0.5) * 0.48;
     const z = 0;
 
     this.positions[p3 + 0] = x;
     this.positions[p3 + 1] = y;
     this.positions[p3 + 2] = z;
 
-    const back = 2.2 + 3.2 * intensity;
+    // Mostly backward along -Z, slight up, jitter
+    const back = 3.4 + 4.4 * intensity;
 
-    this.velocities[p3 + 0] = (Math.random() - 0.5) * (0.9 + 0.7 * intensity);
-    this.velocities[p3 + 1] = 0.55 + Math.random() * (0.9 + 0.6 * intensity);
-    this.velocities[p3 + 2] = -(back + Math.random() * 1.2);
+    this.velocities[p3 + 0] = (Math.random() - 0.5) * (0.75 + 0.65 * intensity);
+    this.velocities[p3 + 1] = 0.18 + Math.random() * (0.32 + 0.25 * intensity);
+    this.velocities[p3 + 2] = -(back + Math.random() * 1.4);
 
-    this.life[i] = 0.55 + Math.random() * 0.65;
+    // short lifetime prevents long lingering trail
+    this.life[i] = 0.32 + Math.random() * 0.38;
   }
 
   update(dt, intensity) {
-    const rate = this._spawnRate * (0.25 + 0.95 * intensity);
-    const spawnProb = Math.min(1, rate * dt);
+    intensity = Math.max(0, Math.min(1, intensity));
 
+    // deterministic continuous emission (no random clumps)
+    const rate = this._emitRate * (0.35 + 0.85 * intensity);
+    this._emitCarry += rate * dt;
+
+    const spawnN = Math.floor(this._emitCarry);
+    this._emitCarry -= spawnN;
+
+    for (let n = 0; n < spawnN; n++) {
+      const i = this._emitCursor;
+      this._emitCursor = (this._emitCursor + 1) % this.count;
+      this._spawn(i, intensity);
+    }
+
+    // Integrate particles
     for (let i = 0; i < this.count; i++) {
+      if (this.life[i] <= 0) continue;
+
       const p3 = i * 3;
-
-      if (this.life[i] <= 0) {
-        if (Math.random() < spawnProb) this._spawn(i, intensity);
-        continue;
-      }
-
       this.life[i] -= dt;
 
       this.positions[p3 + 0] += this.velocities[p3 + 0] * dt;
       this.positions[p3 + 1] += this.velocities[p3 + 1] * dt;
       this.positions[p3 + 2] += this.velocities[p3 + 2] * dt;
 
-      this.velocities[p3 + 0] *= 0.985;
-      this.velocities[p3 + 2] *= 0.988;
-      this.velocities[p3 + 1] += 0.25 * dt;
+      // drag (keep Z moving so particles don't "park" and blob)
+      this.velocities[p3 + 0] *= 0.990;
+      this.velocities[p3 + 2] *= 0.997;
 
-      if (this.positions[p3 + 2] < -10 || this.positions[p3 + 1] > 6) {
-        this.life[i] = 0;
+      // mild buoyancy
+      this.velocities[p3 + 1] += 0.06 * dt;
+
+      // Kill quickly if too far back / too high / expired
+      if (
+        this.life[i] <= 0 ||
+        this.positions[p3 + 2] < -6.2 ||
+        this.positions[p3 + 1] > 3.6
+      ) {
+        this._hide(i);
       }
     }
 
     this.points.geometry.attributes.position.needsUpdate = true;
 
-    // Dimmer bubbles
-    this.material.opacity = 0.12 + 0.45 * intensity;
-    this.material.size = 0.14 + 0.22 * intensity;
+    // global strength
+    this.material.opacity = 0.22 + 0.56 * intensity;
+    this.material.size = 0.13 + 0.14 * intensity;
   }
 }
 
@@ -206,177 +280,119 @@ export class Crawler {
 
     // State
     this.state = "MOVING";
-    this.waypoints = Array.isArray(waypoints) ? waypoints : [];
+
+    // Path
+    this.waypoints = waypoints || [];
     this.wpIndex = 0;
 
-    // Stops / repair
-    this.stopWaypointIdx = new Set();
-    this.stopDuration = 6.0;
-    this.stopTimer = 0;
+    // Phases
+    this.phase = "pathing";
+    this.finalXZ = FINAL_XZ.clone();
+    this.surfaceY = SURFACE_Y;
+    this.ascendSpeed = 4.2;
 
-    // Swim depth + bob
-    this.baseY = this.waypoints?.[0]?.y ?? 0;
+    // Swim bobbing (lifted a bit to avoid terrain deflection/clipping)
+    this.baseY = this.waypoints?.[0]?.y ?? -12;
+    this.baseY += 1.2;
     this.bobT = Math.random() * 10;
 
     // Root
     this.group = new THREE.Group();
-    this.group.position.copy(this.waypoints?.[0] || new THREE.Vector3());
+    this.group.position.copy(this.waypoints?.[0] || new THREE.Vector3(0, this.baseY, 0));
+    this.group.position.y = this.baseY;
     this.position = this.group.position;
+    scene.add(this.group);
 
-    // Visual container
+    // Visual container (so bubbles survive model reload)
     this.visual = new THREE.Group();
     this.group.add(this.visual);
 
-    // Bubble prop-wash effect
-    this.bubbles = new BubbleEmitter(220);
+    // Bubbles
+    this.bubbles = new BubbleEmitter(240);
     this.bubbles.points.position.copy(BUBBLE_LOCAL_OFFSET);
     this.visual.add(this.bubbles.points);
+    this.bubbles.setVisible(true);
 
-    // Prototype propeller reference (optional)
-    this._protoProp = null;
-
-    // Tag for raycasts / gameplay checks
-    markRecursive(this.group, "isCrawler", true);
-
-    scene.add(this.group);
-
-    // temps (avoid per-frame allocations)
-    this._tmpTo = new THREE.Vector3();
-    this._tmpProposed = new THREE.Vector3();
-
-    if (this.visualMode === "prototype") {
-      this._buildPrototype();
-    } else {
-      this._loadRobot();
-    }
-  }
-
-  _clearVisualKeepBubbles() {
-    const bubble = this.bubbles ? this.bubbles.points : null;
-
-    while (this.visual.children.length) {
-      this.visual.remove(this.visual.children[0]);
-    }
-
-    if (bubble) {
-      bubble.position.copy(BUBBLE_LOCAL_OFFSET);
-      this.visual.add(bubble);
-    }
+    // Visual/model
+    this.model = null;
+    if (this.visualMode === "prototype") this._buildPrototype();
+    else this._buildFull(); // async
   }
 
   _buildPrototype() {
-    this._clearVisualKeepBubbles();
-
-    const root = new THREE.Group();
-
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x55656f, roughness: 0.9, metalness: 0.1 });
-    const darkMat = new THREE.MeshStandardMaterial({ color: 0x223038, roughness: 0.95, metalness: 0.05 });
-    const glassMat = new THREE.MeshStandardMaterial({
-      color: 0x88ccff,
-      roughness: 0.15,
-      metalness: 0.0,
-      emissive: 0x88ccff,
-      emissiveIntensity: 0.35,
+    const baseMat = new THREE.MeshStandardMaterial({
+      color: 0x9099a6, roughness: 0.7, metalness: 0.2
     });
 
-    // Main body (forward is +Z)
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.2, 5.2), bodyMat);
-    body.position.set(0, 1.0, 0);
-    root.add(body);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.2, 4.2), baseMat);
+    body.position.y = 0.4;
+    this.visual.add(body);
 
-    // Top module
-    const top = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.7, 2.0), darkMat);
-    top.position.set(0, 1.55, -0.2);
-    root.add(top);
-
-    // Front dome
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 12), darkMat);
-    dome.position.set(0, 1.1, 2.5);
-    root.add(dome);
-
-    // “Eye” / sensor
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 12), glassMat);
-    eye.position.set(0, 1.15, 3.0);
-    root.add(eye);
-
-    // Side “arms”
-    for (const s of [-1, 1]) {
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 2.0), darkMat);
-      arm.position.set(1.55 * s, 0.85, 0.2);
-      root.add(arm);
-
-      const claw = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), darkMat);
-      claw.position.set(1.55 * s, 0.75, 1.25);
-      root.add(claw);
-    }
-
-    // Propeller (back, along -Z)
-    const propBase = new THREE.Group();
-    propBase.position.set(0, 1.0, -2.8);
-    root.add(propBase);
-
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.25, 12), darkMat);
-    hub.rotation.x = Math.PI / 2;
-    propBase.add(hub);
-
-    const prop = new THREE.Group();
-    propBase.add(prop);
+    const propMat = new THREE.MeshStandardMaterial({
+      color: 0x2c3a44, roughness: 0.6, metalness: 0.4
+    });
+    const prop = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.1, 10), propMat);
+    prop.rotation.z = Math.PI / 2;
+    prop.position.set(0, 0.2, -2.2);
+    this.visual.add(prop);
     this._protoProp = prop;
 
-    for (let i = 0; i < 3; i++) {
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.08, 0.18), darkMat);
-      blade.position.set(0.32, 0, 0);
-      blade.rotation.z = (i * Math.PI * 2) / 3;
-      prop.add(blade);
-    }
+    const glow = new THREE.PointLight(0xcfeaff, 0.8, 20);
+    glow.position.set(0, 0.6, 1.5);
+    this.visual.add(glow);
+  }
 
-    // Slight sink so it “sits” in water better
-    root.position.y -= 0.15;
+  async _buildFull() {
+    const candidates = [
+      "./assets/robot.glb",
+      "./assets/crawler.glb",
+      "./assets/Robot.glb",
+      "./assets/robot/robot.glb",
+      "./assets/robot/scene.gltf",
+      "./assets/robot/scene.glb",
+    ];
 
-    markRecursive(root, "isCrawler", true);
-    this.visual.add(root);
+    try {
+      const root = await loadAnyGLTF(candidates);
 
-    // bubbles last (so they remain attached)
-    if (this.bubbles) {
-      this.bubbles.points.position.copy(BUBBLE_LOCAL_OFFSET);
-      this.visual.add(this.bubbles.points);
+      // preserve bubbles when clearing visuals
+      const savedBubbles = this.bubbles?.points || null;
+      while (this.visual.children.length) this.visual.remove(this.visual.children[0]);
+
+      root.scale.setScalar(ROBOT_SCALE);
+      root.rotation.y = ROBOT_YAW_OFFSET;
+      root.position.set(0, -0.6, 0);
+
+      forceOpaque(root);
+
+      this.visual.add(root);
+      this.model = root;
+
+      const glow = new THREE.PointLight(0xcfeaff, 1.2, 26);
+      glow.position.set(0, 1.0, 1.6);
+      this.visual.add(glow);
+
+      if (savedBubbles) {
+        savedBubbles.position.copy(BUBBLE_LOCAL_OFFSET);
+        this.visual.add(savedBubbles);
+      }
+    } catch (e) {
+      console.warn("Crawler model load failed; using prototype fallback:", e);
+      this._buildPrototype();
     }
   }
 
-  _loadRobot() {
-    loadGLBScene("assets/robot.glb")
-      .then(({ scene }) => {
-        if (!scene) return;
-
-        this._clearVisualKeepBubbles();
-
-        scene.scale.setScalar(ROBOT_SCALE);
-        scene.rotation.y += ROBOT_YAW_OFFSET;
-
-        forceOpaqueMaterials(scene);
-
-        markRecursive(scene, "isCrawler", true);
-        this.visual.add(scene);
-
-        if (this.bubbles) {
-          this.bubbles.points.position.copy(BUBBLE_LOCAL_OFFSET);
-          this.visual.add(this.bubbles.points);
-        }
-      })
-      .catch((e) => {
-        console.warn("robot.glb failed to load:", e);
-        // fallback to prototype if GLB fails
-        this.visualMode = "prototype";
-        this._buildPrototype();
-      });
-  }
-
-  repair(amount) {
+  heal(amount) {
     this.hp = Math.min(this.maxHP, this.hp + Math.max(0, amount || 0));
   }
-
   takeDamage(amount) {
     this.hp = Math.max(0, this.hp - Math.max(0, amount || 0));
+  }
+  getHP() {
+    return this.hp;
+  }
+  hasReachedSurface() {
+    return this.phase === "complete";
   }
 
   update(dt, obstacles) {
@@ -387,99 +403,70 @@ export class Crawler {
       return;
     }
 
-    // If we are at (or beyond) the last waypoint, stop cleanly
-    if (this.wpIndex >= this.waypoints.length - 1) {
-      this.state = "EXTRACTED";
-      if (this.bubbles) this.bubbles.setVisible(false);
-      return;
+    // Transition to ascending after finishing waypoint path
+    if (this.wpIndex >= this.waypoints.length - 1 && this.phase === "pathing") {
+      this.phase = "ascending";
     }
 
-    // Swim bob
-    this.bobT += dt;
-    const bob = 0.35 * Math.sin(this.bobT * 0.9);
-    this.position.y = this.baseY + bob;
+    // Ascend phase (XZ locked)
+    if (this.phase === "ascending") {
+      this.group.position.x = this.finalXZ.x;
+      this.group.position.z = this.finalXZ.y;
 
-    // spin prototype prop (if present)
-    if (this._protoProp) {
-      const spin = (this.state === "MOVING") ? 16.0 : 0.0;
-      this._protoProp.rotation.z += spin * dt;
-    }
+      this.group.position.y += this.ascendSpeed * dt;
 
-    // STOPPED_REPAIR
-    if (this.state === "STOPPED_REPAIR") {
-      this.stopTimer += dt;
-      if (this.bubbles) this.bubbles.setVisible(false);
-
-      if (this.stopTimer >= this.stopDuration) {
-        this.state = "MOVING";
-        this.stopTimer = 0;
-      }
-      return;
-    }
-
-    // Bubble intensity
-    const intensity = (this.state === "MOVING") ? 1.0 : 0.0;
-    if (this.bubbles) {
-      this.bubbles.setVisible(intensity > 0);
-      if (intensity > 0) this.bubbles.update(dt, intensity);
-    }
-
-    const next = this.waypoints[this.wpIndex + 1];
-    if (!next) {
-      this.state = "EXTRACTED";
-      if (this.bubbles) this.bubbles.setVisible(false);
-      return;
-    }
-
-    const d = this.position.distanceTo(next);
-
-    if (d <= this.arriveDist) {
-      this.wpIndex += 1;
-      this.baseY = this.waypoints[this.wpIndex].y;
-
-      if (this.stopWaypointIdx.has(this.wpIndex)) {
-        this.state = "STOPPED_REPAIR";
-        this.stopTimer = 0;
-        if (this.bubbles) this.bubbles.setVisible(false);
-        return;
+      if (this.bubbles) {
+        this.bubbles.setVisible(true);
+        this.bubbles.update(dt, 1.0);
       }
 
-      if (this.wpIndex >= this.waypoints.length - 1) {
+      if (this.group.position.y >= this.surfaceY) {
+        this.group.position.y = this.surfaceY;
+        this.phase = "complete";
         this.state = "EXTRACTED";
         if (this.bubbles) this.bubbles.setVisible(false);
       }
-
       return;
     }
 
-    this._seekToward(next, dt, obstacles);
-  }
+    // MOVING along waypoints
+    if (this._protoProp) this._protoProp.rotation.z += 16.0 * dt;
 
-  _seekToward(target, dt, obstacles) {
-    const to = this._tmpTo.subVectors(target, this.position);
-    to.y = 0;
+    const target = this.waypoints[this.wpIndex + 1];
+    const pos = this.group.position;
 
-    const dist = to.length();
-    if (dist < 1e-6) return;
+    _tmpA.copy(target).sub(pos);
+    const dist = _tmpA.length();
 
-    to.multiplyScalar(1 / dist);
+    if (dist < this.arriveDist) {
+      this.wpIndex++;
+      if (this.wpIndex >= this.waypoints.length - 1) return;
+    }
 
-    const proposed = this._tmpProposed.copy(this.position).addScaledVector(
-      to,
-      this.speed * dt
-    );
+    const dir = _tmpA.copy(target).sub(pos);
+    dir.y = 0;
+    if (dir.lengthSq() > 1e-6) dir.normalize();
 
-    resolveSphereCollisions(proposed, this.collisionRadius, obstacles);
-
-    this.position.x = proposed.x;
-    this.position.z = proposed.z;
-
-    // Movement yaw assumes “forward” is +Z
-    const desiredYaw = Math.atan2(to.x, to.z);
+    const desiredYaw = Math.atan2(dir.x, dir.z);
     this.group.rotation.y = lerpAngle(
       this.group.rotation.y,
       desiredYaw,
-      Math.min(1, this.turnSpeed * dt)
+      1 - Math.exp(-this.turnSpeed * dt)
     );
+
+    pos.addScaledVector(dir, this.speed * dt);
+
+    // bobbing
+    this.bobT += dt;
+    pos.y = this.baseY + 0.25 * Math.sin(this.bobT * 1.2);
+
+    // collisions only in XZ
+    resolveSphereCollisionsXZ(pos, this.collisionRadius ?? this.radius, obstacles);
+
+    // Bubbles
+    if (this.bubbles) {
+      this.bubbles.setVisible(true);
+      this.bubbles.update(dt, 0.9);
+    }
   }
 }
