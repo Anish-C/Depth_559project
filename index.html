@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>STEVE Escort</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="hud">
+    <div class="hud-row">
+      <div class="hud-label">Tool:</div>
+      <div id="hudTool" class="hud-value">Harpoon</div>
+      <div class="hud-hint">(1 = Harpoon, 2 = Repair)</div>
+    </div>
+
+    <div class="hud-row" style="margin-top:8px;">
+      <div class="hud-label">STEVE</div>
+      <div class="bar">
+        <div id="steveBar" class="bar-fill"></div>
+      </div>
+      <div id="steveText" class="hud-value">200 / 200</div>
+    </div>
+
+    <div id="hudStatus" class="hud-status"></div>
+
+    <div class="hud-small">
+      Click to lock mouse • WASD swim (W/S follows look) • Mouse aim • LMB use tool
+    </div>
+  </div>
+
+  <div id="reticle"></div>
+
+  <div id="overlay">
+    <div class="panel">
+      <h1>STEVE Escort</h1>
+      <p>Prototype: world + player + tools (CS559 Three module).</p>
+      <button id="startBtn">Start</button>
+    </div>
+  </div>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./libs/CS559-Three/build/three.module.js",
+        "three/addons/": "./libs/CS559-Three/examples/jsm/"
+      }
+    }
+    </script>
+    
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
