@@ -1,0 +1,11 @@
+Model Information:
+* title:	Outer Wilds – Angler Fish
+* source:	https://sketchfab.com/3d-models/outer-wilds-angler-fish-bf8b033488ba4d54b61d3856f25493d5
+* author:	lzyassoul (https://sketchfab.com/lzyassoul)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Outer Wilds – Angler Fish" (https://sketchfab.com/3d-models/outer-wilds-angler-fish-bf8b033488ba4d54b61d3856f25493d5) by lzyassoul (https://sketchfab.com/lzyassoul) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

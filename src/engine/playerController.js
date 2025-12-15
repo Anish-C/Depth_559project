@@ -91,7 +91,6 @@ export class PlayerController {
     // Movement input
     const fwd = (this.input.down("KeyW") ? 1 : 0) + (this.input.down("KeyS") ? -1 : 0);
     const str = (this.input.down("KeyD") ? 1 : 0) + (this.input.down("KeyA") ? -1 : 0);
-    const up = (this.input.down("Space") ? 1 : 0) + ((this.input.down("ControlLeft") || this.input.down("ControlRight")) ? -1 : 0);
 
     // Sprint
     const wantsSprint = this.input.down("ShiftLeft") || this.input.down("ShiftRight");
@@ -102,19 +101,19 @@ export class PlayerController {
     else this.stamina = Math.min(this.staminaMax, this.stamina + this.staminaRegen * dt);
 
     // Direction relative to yaw (camera heading)
+    // Basis from camera: forward and right (robust, even when looking straight up/down)
     const forward = new THREE.Vector3();
     this.camera.getWorldDirection(forward);
+    if (forward.lengthSq() < 1e-6) forward.set(0, 0, -1);
     forward.normalize();
-    
-    // flat version for strafing only
-    const forwardFlat = forward.clone();
-    forwardFlat.y = 0;
-    if (forwardFlat.lengthSq() > 1e-6) forwardFlat.normalize();
-    
-    const rightDir = new THREE.Vector3().crossVectors(forwardFlat, this.camera.up).normalize();
+
+    const rightDir = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    if (rightDir.lengthSq() < 1e-6) rightDir.set(1, 0, 0);
+    rightDir.normalize();
     
 
     const wish = new THREE.Vector3();
+    // Move fully relative to camera POV (including vertical pitch)
     wish.addScaledVector(forward, fwd);
     wish.addScaledVector(rightDir, str);
     if (wish.lengthSq() > 1e-6) wish.normalize();
@@ -123,9 +122,7 @@ export class PlayerController {
     const accel = 18.0;
     this.vel.x += wish.x * accel * dt * speed;
     this.vel.z += wish.z * accel * dt * speed;
-
-    // Vertical
-    this.vel.y += up * accel * dt * this.verticalSpeed;
+    this.vel.y += wish.y * accel * dt * speed;
 
     // Drag
     const drag = Math.exp(-this.drag * dt);

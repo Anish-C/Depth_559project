@@ -9,6 +9,7 @@ import { Crawler } from "./entities/crawler.js";
 
 import { HUD } from "./ui/hud.js";
 import { SharkManager } from "./systems/sharkManager.js";
+import { Anglerfish } from "./entities/anglerfish.js";
 
 const overlay = document.getElementById("overlay");
 const startBtn = document.getElementById("startBtn"); // may exist in HTML, used for styling template
@@ -25,6 +26,7 @@ let gameOverText = "";
 console.log("THREE REV", THREE.REVISION);
 
 let sharkManager;
+let anglerfish;
 
 // Flashlight
 let flashlight, flashlightTarget, flashlightFill;
@@ -81,7 +83,7 @@ function init() {
 
   scene = new THREE.Scene();
 
-  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 6000);
   scene.add(camera);
 
   // World is built after the user chooses Prototype vs Full.
@@ -210,6 +212,13 @@ function startGame(mode) {
   allObstacles = (world?.obstacles || []).concat([steveObstacle]);
 
   sharkManager = new SharkManager(scene, { visualMode: chosenMode });
+
+  // Anglerfish (slow wandering) — spawn ~30m ahead of player start
+  const playerStart = camera.position.clone();
+  const spawnDir = new THREE.Vector3();
+  camera.getWorldDirection(spawnDir);
+  const spawnPos = playerStart.clone().addScaledVector(spawnDir, 30);
+  anglerfish = new Anglerfish(scene, world, { visualMode: chosenMode, spawnNear: spawnPos });
 
   hideOverlay();
   started = true;
@@ -422,6 +431,21 @@ function animate() {
     player.update(dt, allObsNow, repairing);
     if (nowS < moveStunUntil) camera.position.copy(beforePos);
 
+    // Clamp to sea floor: prevent player from going below dynamic seafloor
+    if (typeof world.getSeafloorY === "function") {
+      const floorY = world.getSeafloorY(camera.position.x, camera.position.z);
+      const minY = floorY + 0.1; // small offset to avoid z-fighting
+      if (camera.position.y < minY) camera.position.y = minY;
+    }
+
+    // Clamp only: limit player to 2m above surface in full mode
+    const hasSurface = typeof world.getWaterSurfaceY === "function";
+    if (chosenMode === "full" && hasSurface) {
+      const surfaceY = world.getWaterSurfaceY();
+      const maxY = surfaceY + 2.0;
+      if (camera.position.y > maxY) camera.position.y = maxY;
+    }
+
     if (player.tool !== lastTool) {
       toolModels.setTool(player.tool);
       lastTool = player.tool;
@@ -490,6 +514,7 @@ function animate() {
     });
 
     updateWorld(world, dt);
+    if (anglerfish) anglerfish.update(dt, nowS);
     updateImpacts(dt);
     updateProjectiles(dt);
 

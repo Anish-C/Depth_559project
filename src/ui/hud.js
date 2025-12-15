@@ -20,5 +20,6 @@ export class HUD {
       this.steveBar.style.width = `${(p * 100).toFixed(1)}%`;
       this.steveText.textContent = `${Math.round(hp)} / ${Math.round(maxHP)}`;
     }
+
   }
   
