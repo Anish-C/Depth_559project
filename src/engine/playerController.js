@@ -75,6 +75,7 @@ export class PlayerController {
     // Tool switching
     if (this.input.down("Digit1")) this.tool = Tool.HARPOON;
     if (this.input.down("Digit2")) this.tool = Tool.REPAIR;
+    
 
     // Mouse look
     if (!lockAim) {

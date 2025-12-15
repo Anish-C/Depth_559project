@@ -1,49 +1,33 @@
 import * as THREE from "three";
 import { loadGLBScene } from "../engine/assets.js";
 
-/**
- * buildWorld(scene, mode)
- * - mode: "prototype" | "full"
- *
- * Returns:
- * {
- *   keyLight, particles,
- *   obstacles,        // sphere obstacles for sharks/crawler: [{center, radius}]
- *   playerObstacles,  // colliders for player: [{type:"box", box:THREE.Box3}, {type:"sphere", center, radius}]
- *   raycastMeshes,    // meshes to raycast against (floor + props)
- *   getSeafloorY(x,z) // basic height helper (approx)
- * }
- */
 export function buildWorld(scene, mode = "full") {
-  scene.background = new THREE.Color(0x04131a);
-  scene.fog = new THREE.FogExp2(0x04131a, 0.010);
+  scene.background = new THREE.Color(0x12586d);
+  scene.fog = new THREE.FogExp2(0x12586d, 0.014);
 
   const obstacles = [];
   const playerObstacles = [];
   const raycastMeshes = [];
 
-  // Lighting
-  const ambient = new THREE.AmbientLight(0x3b6b80, 1.10);
+  const ambient = new THREE.AmbientLight(0xaee7f2, 1.75);
   scene.add(ambient);
 
-  const hemi = new THREE.HemisphereLight(0x9ad7ff, 0x061016, 0.90);
+  const hemi = new THREE.HemisphereLight(0xe2fdff, 0x0b2f38, 1.22);
   scene.add(hemi);
 
-  const sun = new THREE.DirectionalLight(0xbfe9ff, 0.45);
-  sun.position.set(0, 50, 20);
+  const sun = new THREE.DirectionalLight(0xf3feff, 0.95);
+  sun.position.set(0, 75, 40);
   scene.add(sun);
 
-  const keyLight = new THREE.PointLight(0x9fe5ff, 2.0, 280);
-  keyLight.position.set(0, 18, 10);
+  const keyLight = new THREE.PointLight(0xc3f8ff, 3.6, 560);
+  keyLight.position.set(0, 28, 16);
   keyLight.userData.t = 0;
   scene.add(keyLight);
 
-  // Build geometry depending on mode
-  const seafloor = (mode === "prototype")
+  const seafloor = mode === "prototype"
     ? buildPrototypeWorld(scene, obstacles, playerObstacles, raycastMeshes)
     : buildFullOceanWorld(scene, obstacles, playerObstacles, raycastMeshes);
 
-  // Marine snow particles (both modes)
   const particles = createMarineSnow(scene, mode);
 
   return {
@@ -60,22 +44,16 @@ export function updateWorld(world, dt) {
   const k = world.keyLight;
   k.userData.t += dt;
   const t = k.userData.t;
-  k.intensity = 1.95 + 0.08 * Math.sin(t * 5.5) + 0.04 * Math.sin(t * 12.5);
-
+  k.intensity = 3.25 + 0.10 * Math.sin(t * 4.0) + 0.06 * Math.sin(t * 9.3);
   updateMarineSnow(world.particles, dt);
 }
 
-/* =========================
-   Prototype world (old style)
-   ========================= */
 function buildPrototypeWorld(scene, obstacles, playerObstacles, raycastMeshes) {
-  scene.background = new THREE.Color(0x04131a);
-  scene.fog = new THREE.FogExp2(0x04131a, 0.012);
+  scene.background = new THREE.Color(0x12586d);
+  scene.fog = new THREE.FogExp2(0x12586d, 0.015);
   addDimSky(scene);
 
-  // Seafloor
   const floorGeo = new THREE.PlaneGeometry(520, 520, 120, 120);
-  // add slight displacement for interest
   const pos = floorGeo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
@@ -86,51 +64,48 @@ function buildPrototypeWorld(scene, obstacles, playerObstacles, raycastMeshes) {
   floorGeo.computeVertexNormals();
 
   const floorMat = new THREE.MeshStandardMaterial({
-    color: 0x10252e,
+    color: 0x1b4f5f,
     roughness: 1,
     metalness: 0,
-    emissive: 0x010304,
+    emissive: 0x06161a,
+    emissiveIntensity: 0.95,
   });
+
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -10.5;
   floor.receiveShadow = true;
   scene.add(floor);
   raycastMeshes.push(floor);
-  // Caustics overlay on seafloor
-  addCausticsOverlay(scene, -10.5, 520);
-  // Prototype water surface overlay (basic), used for visual split
+
   addWaterOverlay(scene, { mode: "prototype" });
-  // Sunken plane (prototype: rectangle hitbox)
+
   addSunkenPlane(scene, obstacles, playerObstacles, raycastMeshes, {
     mode: "prototype",
-    // moved 50 away from center along X
     position: new THREE.Vector3(30, -12.0, 95),
     rotationY: Math.PI * 0.12,
     scale: 0.5,
   });
-  // Second prototype plane, 600 units behind
-  addSunkenPlane(scene, obstacles, playerObstacles, raycastMeshes, {
-    mode: "prototype",
-    position: new THREE.Vector3(30, -12.0, -505),
-    rotationY: Math.PI * 0.12,
-    scale: 0.5,
-  });
 
-  // Prototype shipwreck: simple rectangle footprint
   addPrototypeRectObstacle(scene, obstacles, playerObstacles, raycastMeshes, {
     position: new THREE.Vector3(-35, -10.4, -45),
     size: new THREE.Vector3(18, 2, 50),
     rotationY: Math.PI / 6,
-    color: 0x20333b,
+    color: 0x2d6774,
   });
 
-  // Rock field (few chunky rocks)
   const rockMat = new THREE.MeshStandardMaterial({
-    color: 0x1b3a44,
+    color: 0x246a79,
     roughness: 1,
     metalness: 0.0,
+    emissive: 0x020607,
+    emissiveIntensity: 0.34,
   });
+
+  const protoSeafloorY = (x, z) => {
+    const n = 0.9 * Math.sin(x * 0.035) * Math.cos(z * 0.035);
+    return -10.5 + n;
+  };
 
   scatterRockField(scene, obstacles, playerObstacles, raycastMeshes, rockMat, {
     centerZ: -18,
@@ -141,39 +116,32 @@ function buildPrototypeWorld(scene, obstacles, playerObstacles, raycastMeshes) {
     yMax: -6.5,
     rMin: 2.6,
     rMax: 6.8,
-    getSeafloorY: (x, z) => {
-      const n = 0.9 * Math.sin(x * 0.035) * Math.cos(z * 0.035);
-      return -10.5 + n;
-    },
+    getSeafloorY: protoSeafloorY,
+  });
+
+  addKelpField(scene, {
+    count: 900,
+    area: 520,
+    yBase: -10.5,
+    centerZ: -10,
+    getSeafloorY: protoSeafloorY,
   });
 
   return {
-    getSeafloorY(x, z) {
-      // plane displaced around y=-10.5; approx using same sinusoid
-      const n = 0.9 * Math.sin(x * 0.035) * Math.cos(z * 0.035);
-      return -10.5 + n;
-    },
+    getSeafloorY: protoSeafloorY,
     getWaterSurfaceY() { return 48; }
   };
 }
 
-/* =========================
-   Full ocean world (partner-inspired)
-   ========================= */
 function buildFullOceanWorld(scene, obstacles, playerObstacles, raycastMeshes) {
-  // Atmosphere
-  scene.background = new THREE.Color(0x0b2230);
-  scene.fog = new THREE.FogExp2(0x0b2230, 0.012);
-  // Dim sky dome with central sun
-  addDimSky(scene);
+  scene.background = new THREE.Color(0x12586d);
+  scene.fog = new THREE.FogExp2(0x12586d, 0.015);
 
-  // Water surface (visual only) — fuller blue and fog-aware in full mode
+  addDimSky(scene);
   addWaterOverlay(scene, { mode: "full" });
 
-  // Seafloor (displaced)
   const floorGeo = new THREE.PlaneGeometry(620, 620, 180, 180);
   const pos = floorGeo.attributes.position;
-  // Simple fBM-ish
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const y = pos.getY(i);
@@ -186,60 +154,67 @@ function buildFullOceanWorld(scene, obstacles, playerObstacles, raycastMeshes) {
   floorGeo.computeVertexNormals();
 
   const floorMat = new THREE.MeshStandardMaterial({
-    color: 0x0f2a33,
+    color: 0x1a5262,
     roughness: 1,
     metalness: 0,
-    emissive: 0x010304,
+    emissive: 0x06161a,
+    emissiveIntensity: 0.98,
   });
+
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -18.5;
   floor.receiveShadow = true;
   scene.add(floor);
   raycastMeshes.push(floor);
-  // Caustics overlay on seafloor
-  addCausticsOverlay(scene, -18.5, 620);
-  // Sunken plane GLTF obstacle
+
   addSunkenPlane(scene, obstacles, playerObstacles, raycastMeshes, {
     mode: "full",
-    // moved 50 away from center along X
-    position: new THREE.Vector3(72, -18.8, 102),
-    rotationY: Math.PI * -0.18,
-    scale: 0.5,
-  });
-  // Second full plane, 600 units behind
-  addSunkenPlane(scene, obstacles, playerObstacles, raycastMeshes, {
-    mode: "full",
-    position: new THREE.Vector3(72, -18.8, -498),
+    position: new THREE.Vector3(0, -18.8, 102),
     rotationY: Math.PI * -0.18,
     scale: 0.5,
   });
 
-  // “Shipwreck” using primitives (partner-style feel)
   const ship = createShipwreck({
     scale: 2.0,
-    color: 0x2d3f4a,
-    accent: 0x1b2a33,
+    color: 0x3f7280,
+    accent: 0x253d46,
   });
+
   ship.group.position.set(-35, -15.5, -45);
   ship.group.rotation.y = Math.PI / 6;
   ship.group.rotation.z = 0.12;
   scene.add(ship.group);
 
-  // Colliders from ship group:
-// tighter: shrink the player box & shrink NPC sphere so things can pass around it
-  addGroupColliders(ship.group, playerObstacles, obstacles, raycastMeshes, {
-    spherePadding: 0.15,
-    sphereScale: 0.55,  // ✅ shrink NPC collision sphere a lot
-    boxShrink: 2.4      // ✅ shrink player AABB collider a bit
+  ship.group.traverse((obj) => {
+    if (obj.isMesh) raycastMeshes.push(obj);
   });
-  
-  // Rock fields
+
+  addShipwreckColliders(ship.group, playerObstacles, obstacles, {
+    boxShrink: 8.0,
+    spheres: [
+      { offset: new THREE.Vector3(0, 0.8, 0), radius: 5.0 },
+      { offset: new THREE.Vector3(0, 0.8, -10), radius: 4.0 },
+      { offset: new THREE.Vector3(0, 0.8, 10), radius: 4.0 },
+      { offset: new THREE.Vector3(6, 2.4, -2), radius: 2.4 },
+    ],
+  });
+
   const rockMat = new THREE.MeshStandardMaterial({
-    color: 0x163741,
+    color: 0x266f80,
     roughness: 1,
     metalness: 0.0,
+    emissive: 0x020607,
+    emissiveIntensity: 0.30,
   });
+
+  const fullSeafloorY = (x, z) => {
+    const h =
+      2.2 * Math.sin(x * 0.018) * Math.cos(z * 0.018) +
+      1.4 * Math.sin(x * 0.045 + 1.3) * Math.cos(z * 0.045 - 0.7) +
+      0.6 * Math.sin(x * 0.095 - 2.0) * Math.cos(z * 0.095 + 0.5);
+    return -18.5 + h;
+  };
 
   scatterRockField(scene, obstacles, playerObstacles, raycastMeshes, rockMat, {
     centerZ: -10,
@@ -250,37 +225,126 @@ function buildFullOceanWorld(scene, obstacles, playerObstacles, raycastMeshes) {
     yMax: -10,
     rMin: 2.4,
     rMax: 7.2,
-    getSeafloorY: (x, z) => {
-      const h =
-        2.2 * Math.sin(x * 0.018) * Math.cos(z * 0.018) +
-        1.4 * Math.sin(x * 0.045 + 1.3) * Math.cos(z * 0.045 - 0.7) +
-        0.6 * Math.sin(x * 0.095 - 2.0) * Math.cos(z * 0.095 + 0.5);
-      return -18.5 + h;
-    },
+    getSeafloorY: fullSeafloorY,
   });
 
-  // Coral clusters (simple)
-  addCoralClusters(scene, obstacles, playerObstacles, raycastMeshes);
+  addKelpField(scene, {
+    count: 1800,
+    area: 620,
+    yBase: -18.5,
+    centerZ: -20,
+    getSeafloorY: fullSeafloorY,
+  });
 
-  // Debris field near ship
+  addCoralClusters(scene, obstacles, playerObstacles, raycastMeshes);
   addDebris(scene, obstacles, playerObstacles, raycastMeshes);
 
   return {
-    getSeafloorY(x, z) {
-      // approximate height function used for floor displacement
-      const h =
-        2.2 * Math.sin(x * 0.018) * Math.cos(z * 0.018) +
-        1.4 * Math.sin(x * 0.045 + 1.3) * Math.cos(z * 0.045 - 0.7) +
-        0.6 * Math.sin(x * 0.095 - 2.0) * Math.cos(z * 0.095 + 0.5);
-      return -18.5 + h;
-    },
+    getSeafloorY: fullSeafloorY,
     getWaterSurfaceY() { return 48; }
   };
 }
 
-/* =========================
-   Helpers: particles
-   ========================= */
+function makeKelpRibbonGeometry({ width = 0.7, height = 1.0, segs = 10, bend = 0.22, twist = 0.25, taper = 0.75 } = {}) {
+  const geo = new THREE.PlaneGeometry(width, height, 1, segs);
+  const p = geo.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const t = (v.y / height) + 0.5;
+    const taperK = 1.0 - taper * t;
+    v.x *= taperK;
+    const s = Math.sin(t * Math.PI);
+    v.z += s * bend;
+    const ang = (t - 0.5) * twist;
+    const cx = v.x * Math.cos(ang) - v.z * Math.sin(ang);
+    const cz = v.x * Math.sin(ang) + v.z * Math.cos(ang);
+    v.x = cx;
+    v.z = cz;
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function addKelpField(scene, {
+  count = 500,
+  area = 520,
+  yBase = -18.5,
+  getSeafloorY = null,
+  centerZ = 0
+} = {}) {
+  const group = new THREE.Group();
+
+  const kelpMat = new THREE.MeshStandardMaterial({
+    color: 0x1a8d63,
+    roughness: 0.90,
+    metalness: 0.0,
+    emissive: 0x02130b,
+    emissiveIntensity: 0.50,
+    side: THREE.DoubleSide,
+  });
+
+  const g1 = makeKelpRibbonGeometry({ width: 0.75, height: 1, segs: 10, bend: 0.22, twist: 0.22, taper: 0.72 });
+  const g2 = makeKelpRibbonGeometry({ width: 0.70, height: 1, segs: 12, bend: 0.28, twist: 0.30, taper: 0.76 });
+  const g3 = makeKelpRibbonGeometry({ width: 0.65, height: 1, segs: 9,  bend: 0.18, twist: 0.18, taper: 0.70 });
+
+  const a = new THREE.InstancedMesh(g1, kelpMat, count);
+  const b = new THREE.InstancedMesh(g2, kelpMat, count);
+  const c = new THREE.InstancedMesh(g3, kelpMat, count);
+
+  const dummy = new THREE.Object3D();
+
+  for (let i = 0; i < count; i++) {
+    const x = (Math.random() - 0.5) * area;
+    const z = centerZ + (Math.random() - 0.5) * area;
+    const floorY = (typeof getSeafloorY === "function") ? getSeafloorY(x, z) : yBase;
+
+    const stalkH = 4.2 + Math.random() * 10.2;
+    const stalkW = 0.85 + Math.random() * 0.55;
+
+    const yaw = Math.random() * Math.PI * 2;
+    const lean = (Math.random() - 0.5) * 0.28;
+
+    const fronds = 3 + Math.floor(Math.random() * 3);
+
+    dummy.position.set(x, floorY + stalkH * 0.5, z);
+    dummy.rotation.set(lean, yaw, 0);
+    dummy.scale.set(stalkW, stalkH, 1);
+    dummy.updateMatrix();
+    a.setMatrixAt(i, dummy.matrix);
+
+    const yaw2 = yaw + Math.PI / 2 + (Math.random() - 0.5) * 0.35;
+    dummy.position.set(x, floorY + stalkH * 0.5, z);
+    dummy.rotation.set(lean, yaw2, 0);
+    dummy.scale.set(stalkW * 0.95, stalkH * (0.90 + Math.random() * 0.20), 1);
+    dummy.updateMatrix();
+    b.setMatrixAt(i, dummy.matrix);
+
+    const yaw3 = yaw + (Math.random() - 0.5) * 0.9;
+    dummy.position.set(
+      x + (Math.random() - 0.5) * (0.55 + 0.25 * fronds),
+      floorY + stalkH * 0.5,
+      z + (Math.random() - 0.5) * (0.55 + 0.25 * fronds)
+    );
+    dummy.rotation.set(lean * 0.8, yaw3, 0);
+    dummy.scale.set(stalkW * 0.85, stalkH * (0.78 + Math.random() * 0.26), 1);
+    dummy.updateMatrix();
+    c.setMatrixAt(i, dummy.matrix);
+  }
+
+  a.instanceMatrix.needsUpdate = true;
+  b.instanceMatrix.needsUpdate = true;
+  c.instanceMatrix.needsUpdate = true;
+
+  group.add(a);
+  group.add(b);
+  group.add(c);
+
+  scene.add(group);
+  return group;
+}
+
 function createMarineSnow(scene, mode) {
   const count = mode === "prototype" ? 900 : 1400;
   const geo = new THREE.BufferGeometry();
@@ -297,10 +361,10 @@ function createMarineSnow(scene, mode) {
 
   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   const mat = new THREE.PointsMaterial({
-    color: 0xbfe9ff,
+    color: 0xeefcff,
     size: 0.10,
     transparent: true,
-    opacity: 0.28,
+    opacity: 0.23,
     depthWrite: false,
   });
 
@@ -315,9 +379,7 @@ function updateMarineSnow(particles, dt) {
   if (!particles) return;
   const { points, speeds, count } = particles;
   const pos = points.geometry.attributes.position;
-
   for (let i = 0; i < count; i++) {
-    const p3 = i * 3;
     const y = pos.getY(i) - speeds[i] * dt;
     pos.setY(i, y < -30 ? 60 : y);
   }
@@ -326,38 +388,11 @@ function updateMarineSnow(particles, dt) {
 
 function addDimSky(scene) {
   const radius = 3000;
-  const skyGeo = new THREE.SphereGeometry(radius, 64, 64);
+  const skyGeo = new THREE.SphereGeometry(radius, 48, 48);
   skyGeo.scale(1, 1, -1);
 
-  const skyMat = new THREE.ShaderMaterial({
-    uniforms: {
-      topColor: { value: new THREE.Color(0x0b2230) },
-      horizonColor: { value: new THREE.Color(0x123042) },
-      bottomColor: { value: new THREE.Color(0x0a1a24) },
-      intensity: { value: 0.6 },
-    },
-    vertexShader: `
-      varying vec3 vWorldPos;
-      void main() {
-        vec4 wp = modelMatrix * vec4(position, 1.0);
-        vWorldPos = wp.xyz;
-        gl_Position = projectionMatrix * viewMatrix * wp;
-      }
-    `,
-    fragmentShader: `
-      varying vec3 vWorldPos;
-      uniform vec3 topColor;
-      uniform vec3 horizonColor;
-      uniform vec3 bottomColor;
-      uniform float intensity;
-      void main() {
-        float h = clamp(vWorldPos.y / 3000.0, -1.0, 1.0);
-        float t = smoothstep(-0.3, 0.8, h);
-        vec3 col = mix(bottomColor, horizonColor, smoothstep(-0.8, 0.0, h));
-        col = mix(col, topColor, t);
-        gl_FragColor = vec4(col * intensity, 1.0);
-      }
-    `,
+  const skyMat = new THREE.MeshBasicMaterial({
+    color: 0x12586d,
     side: THREE.BackSide,
     depthWrite: false,
   });
@@ -366,23 +401,21 @@ function addDimSky(scene) {
   sky.renderOrder = -1;
   scene.add(sky);
 
-  const sunGeo = new THREE.SphereGeometry(60, 32, 32);
-  const sunMat = new THREE.MeshBasicMaterial({ color: 0xfff3a1 });
+  const sunGeo = new THREE.SphereGeometry(60, 24, 24);
+  const sunMat = new THREE.MeshBasicMaterial({ color: 0xfff8d9 });
   const sun = new THREE.Mesh(sunGeo, sunMat);
   sun.position.set(0, 3000, 0);
   sun.renderOrder = 0;
   scene.add(sun);
 
-  const hemi = new THREE.HemisphereLight(0x9bbbd1, 0x0a1a24, 0.15);
+  const hemi = new THREE.HemisphereLight(0xeafcff, 0x0b2f38, 0.24);
   scene.add(hemi);
-  const dir = new THREE.DirectionalLight(0xfff3a1, 0.25);
+
+  const dir = new THREE.DirectionalLight(0xfff8d9, 0.42);
   dir.position.copy(sun.position);
   scene.add(dir);
 }
 
-/* =========================
-   Helpers: obstacles + props
-   ========================= */
 function scatterRockField(scene, obstacles, playerObstacles, raycastMeshes, rockMat, opts) {
   const {
     centerZ = 0,
@@ -406,59 +439,28 @@ function scatterRockField(scene, obstacles, playerObstacles, raycastMeshes, rock
 
     const rx = (Math.random() - 0.5) * spreadX;
     const rz = centerZ + (Math.random() - 0.5) * spreadZ;
+
     let ry;
     if (typeof getSeafloorY === "function") {
       const floorY = getSeafloorY(rx, rz);
-      ry = floorY + 0.02; // slight offset to avoid z-fighting
+      ry = floorY + 0.02;
     } else {
       ry = (yMin + Math.random() * (yMax - yMin)) - 1.0;
     }
+
     rock.position.set(rx, ry, rz);
     rock.rotation.set(Math.random(), Math.random(), Math.random());
     scene.add(rock);
     raycastMeshes.push(rock);
 
-    // Player collider (AABB)
     const box = new THREE.Box3().setFromObject(rock);
     playerObstacles.push({ type: "box", box });
 
-    // NPC sphere obstacle
     const sphere = new THREE.Sphere();
     box.getBoundingSphere(sphere);
-    obstacles.push({ center: sphere.center.clone(), radius: sphere.radius });
+    obstacles.push({ center: sphere.center.clone(), radius: sphere.radius, kind: "rock" });
   }
 }
-
-function addGroupColliders(
-    group,
-    playerObstacles,
-    obstacles,
-    raycastMeshes,
-    { spherePadding = 0, sphereScale = 1.0, boxShrink = 0 } = {}
-  ) {
-    // Raycast all meshes
-    group.traverse((obj) => {
-      if (obj.isMesh) raycastMeshes.push(obj);
-    });
-  
-    // Player collider: shrink the box so it matches "walkable" space better
-    const box = new THREE.Box3().setFromObject(group);
-    if (boxShrink > 0) box.expandByScalar(-boxShrink);
-  
-    // Only add if box is still valid (shrink can invert it if too large)
-    if (box.min.x <= box.max.x && box.min.y <= box.max.y && box.min.z <= box.max.z) {
-      playerObstacles.push({ type: "box", box });
-    }
-  
-    // NPC collider: bounding sphere of (possibly shrunk) box, scaled down
-    const sphere = new THREE.Sphere();
-    box.getBoundingSphere(sphere);
-    obstacles.push({
-      center: sphere.center.clone(),
-      radius: (sphere.radius * sphereScale) + spherePadding,
-    });
-  }
-  
 
 function createShipwreck({ scale = 1, color = 0x2d3f4a, accent = 0x1b2a33 } = {}) {
   const group = new THREE.Group();
@@ -466,32 +468,26 @@ function createShipwreck({ scale = 1, color = 0x2d3f4a, accent = 0x1b2a33 } = {}
   const hullMat = new THREE.MeshStandardMaterial({ color, roughness: 0.95, metalness: 0.0 });
   const accentMat = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.9, metalness: 0.0 });
 
-  // Hull
   const hullGeo = new THREE.BoxGeometry(10 * scale, 3.2 * scale, 28 * scale);
   const hull = new THREE.Mesh(hullGeo, hullMat);
-  hull.position.set(0, 0, 0);
   group.add(hull);
 
-  // Deck
   const deckGeo = new THREE.BoxGeometry(9.2 * scale, 0.6 * scale, 22 * scale);
   const deck = new THREE.Mesh(deckGeo, accentMat);
   deck.position.set(0, 1.5 * scale, 1.0 * scale);
   group.add(deck);
 
-  // Cabin
   const cabGeo = new THREE.BoxGeometry(6.4 * scale, 3.2 * scale, 6.8 * scale);
   const cabin = new THREE.Mesh(cabGeo, accentMat);
   cabin.position.set(0, 3.0 * scale, -5.8 * scale);
   group.add(cabin);
 
-  // Mast (broken)
   const mastGeo = new THREE.CylinderGeometry(0.35 * scale, 0.35 * scale, 12 * scale, 10);
   const mast = new THREE.Mesh(mastGeo, hullMat);
   mast.position.set(1.5 * scale, 6.0 * scale, 3.0 * scale);
   mast.rotation.z = 1.1;
   group.add(mast);
 
-  // Some ribs
   const ribGeo = new THREE.BoxGeometry(0.4 * scale, 2.4 * scale, 6.0 * scale);
   for (let i = -3; i <= 3; i++) {
     const rib = new THREE.Mesh(ribGeo, accentMat);
@@ -504,9 +500,22 @@ function createShipwreck({ scale = 1, color = 0x2d3f4a, accent = 0x1b2a33 } = {}
   return { group };
 }
 
+function addShipwreckColliders(group, playerObstacles, obstacles, { boxShrink = 0, spheres = [] } = {}) {
+  const box = new THREE.Box3().setFromObject(group);
+  if (boxShrink > 0) box.expandByScalar(-boxShrink);
+  if (box.min.x <= box.max.x && box.min.y <= box.max.y && box.min.z <= box.max.z) {
+    playerObstacles.push({ type: "box", box });
+  }
+  for (const s of spheres) {
+    const center = s.offset.clone();
+    group.localToWorld(center);
+    obstacles.push({ center, radius: s.radius });
+  }
+}
+
 function addCoralClusters(scene, obstacles, playerObstacles, raycastMeshes) {
   const coralMat = new THREE.MeshStandardMaterial({
-    color: 0x2e6b5b,
+    color: 0x2f8a72,
     roughness: 0.95,
     metalness: 0.0,
     emissive: 0x020403,
@@ -537,7 +546,15 @@ function addCoralClusters(scene, obstacles, playerObstacles, raycastMeshes) {
     }
 
     scene.add(g);
-    addGroupColliders(g, playerObstacles, obstacles, raycastMeshes, { spherePadding: 0.2 });
+
+    const box = new THREE.Box3().setFromObject(g);
+    playerObstacles.push({ type: "box", box });
+
+    const sphere = new THREE.Sphere();
+    box.getBoundingSphere(sphere);
+    obstacles.push({kind: "coral", center: sphere.center.clone(), radius: sphere.radius + 0.2 });
+
+    g.traverse((obj) => { if (obj.isMesh) raycastMeshes.push(obj); });
   }
 }
 
@@ -573,19 +590,12 @@ function addDebris(scene, obstacles, playerObstacles, raycastMeshes) {
   }
 }
 
-async function addSunkenPlane(
-  scene,
-  obstacles,
-  playerObstacles,
-  raycastMeshes,
-  { mode = "full", position = new THREE.Vector3(), rotationY = 0, scale = 1 } = {}
-) {
+async function addSunkenPlane(scene, obstacles, playerObstacles, raycastMeshes, { mode = "full", position = new THREE.Vector3(), rotationY = 0, scale = 1 } = {}) {
   if (mode === "prototype") {
-    // Approximate physical footprint with a flat rectangle (half-size)
-    const w = 4.5 * scale; // quarter of plane length footprint
-    const d = 3.0 * scale; // quarter of wingspan footprint
-    const h = 0.6 * scale; // thin
-    const mat = new THREE.MeshStandardMaterial({ color: 0x20333b, roughness: 0.98, metalness: 0 });
+    const w = 4.5 * scale;
+    const d = 3.0 * scale;
+    const h = 0.6 * scale;
+    const mat = new THREE.MeshStandardMaterial({ color: 0x2d6774, roughness: 0.98, metalness: 0 });
     const geo = new THREE.BoxGeometry(w, h, d);
     const rect = new THREE.Mesh(geo, mat);
     rect.position.copy(position);
@@ -595,6 +605,7 @@ async function addSunkenPlane(
 
     const box = new THREE.Box3().setFromObject(rect);
     playerObstacles.push({ type: "box", box });
+
     const sphere = new THREE.Sphere();
     box.getBoundingSphere(sphere);
     obstacles.push({ center: sphere.center.clone(), radius: sphere.radius });
@@ -610,91 +621,44 @@ async function addSunkenPlane(
     group.scale.setScalar(scale);
     scene.add(group);
 
-    // Colliders
-    addGroupColliders(group, playerObstacles, obstacles, raycastMeshes, {
-      spherePadding: 0.08,
-      // further reduce collider scale for tighter obstacle footprint
-      sphereScale: 0.18,
-      // shrink player AABB even more
-      boxShrink: 6.5,
-    });
+    group.traverse((obj) => { if (obj.isMesh) raycastMeshes.push(obj); });
+
+    const box = new THREE.Box3().setFromObject(group);
+    box.expandByScalar(-8.0);
+    if (box.min.x <= box.max.x && box.min.y <= box.max.y && box.min.z <= box.max.z) {
+      playerObstacles.push({ type: "box", box });
+    }
+
+    const sphere = new THREE.Sphere();
+    box.getBoundingSphere(sphere);
+    obstacles.push({ center: sphere.center.clone(), radius: sphere.radius * 0.16 + 0.07 });
   } catch (e) {
-    // Fallback to prototype rectangle if asset fails
-    addSunkenPlane(scene, obstacles, playerObstacles, raycastMeshes, {
-      mode: "prototype",
-      position,
-      rotationY,
-      scale,
-    });
+    addSunkenPlane(scene, obstacles, playerObstacles, raycastMeshes, { mode: "prototype", position, rotationY, scale });
   }
 }
 
-// Simplified water overlay without GLSL: opaque horizontal plane at the surface height.
 function addWaterOverlay(scene, { mode = "full" } = {}) {
   const geo = new THREE.PlaneGeometry(620, 620, 1, 1);
   const mat = new THREE.MeshStandardMaterial({
-    color: mode === "full" ? 0x1f6fa3 : 0x2a6590,
-    roughness: 0.25,
+    color: mode === "full" ? 0x6fd3ea : 0x75d7ee,
+    roughness: 0.12,
     metalness: 0.0,
     transparent: false,
     opacity: 1.0,
-    emissive: 0x020609,
+    emissive: 0x0c343b,
+    emissiveIntensity: 0.50,
     depthWrite: true,
   });
   mat.fog = true;
   const overlay = new THREE.Mesh(geo, mat);
-  overlay.rotation.x = -Math.PI / 2; // make it horizontal (X-Z plane)
-  overlay.position.y = 48;           // define clear split on Y axis
+  overlay.rotation.x = -Math.PI / 2;
+  overlay.position.y = 48;
   overlay.receiveShadow = true;
   overlay.renderOrder = 2;
   scene.add(overlay);
 }
 
-// Caustics overlay: grid-like glowing lines animated over the seafloor
-async function addCausticsOverlay(scene, y = -18.5, size = 620) {
-  try {
-    const [vert, frag] = await Promise.all([
-      fetch('threejs-water-master/shaders/caustics/vertex.glsl').then(r => r.text()),
-      fetch('threejs-water-master/shaders/caustics/fragment.glsl').then(r => r.text()),
-    ]);
-
-    const uniforms = {
-      uTime: { value: 0 },
-      uIntensity: { value: 1.0 },
-    };
-
-    const mat = new THREE.ShaderMaterial({
-      vertexShader: vert,
-      fragmentShader: frag,
-      uniforms,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-
-    const geo = new THREE.PlaneGeometry(size, size, 1, 1);
-    const caustics = new THREE.Mesh(geo, mat);
-    caustics.rotation.x = -Math.PI / 2;
-    caustics.position.y = y + 0.01; // slight offset to avoid z-fight
-    caustics.renderOrder = 3;
-    scene.add(caustics);
-
-    caustics.onBeforeRender = () => {
-      uniforms.uTime.value = performance.now() * 0.001;
-    };
-  } catch (e) {
-    console.warn('Caustics overlay shader load failed:', e);
-  }
-}
-
-// Helper: prototype rectangle obstacle (for shipwreck/planewreck placeholders)
-function addPrototypeRectObstacle(
-  scene,
-  obstacles,
-  playerObstacles,
-  raycastMeshes,
-  { position = new THREE.Vector3(), size = new THREE.Vector3(10, 2, 20), rotationY = 0, color = 0x20333b } = {}
-) {
+function addPrototypeRectObstacle(scene, obstacles, playerObstacles, raycastMeshes, { position = new THREE.Vector3(), size = new THREE.Vector3(10, 2, 20), rotationY = 0, color = 0x20333b } = {}) {
   const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.98, metalness: 0 });
   const geo = new THREE.BoxGeometry(size.x, size.y, size.z);
   const rect = new THREE.Mesh(geo, mat);
@@ -707,6 +671,7 @@ function addPrototypeRectObstacle(
 
   const box = new THREE.Box3().setFromObject(rect);
   playerObstacles.push({ type: "box", box });
+
   const sphere = new THREE.Sphere();
   box.getBoundingSphere(sphere);
   obstacles.push({ center: sphere.center.clone(), radius: sphere.radius });

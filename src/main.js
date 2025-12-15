@@ -19,6 +19,8 @@ let input, player, world, crawler, hud;
 let started = false;
 let chosenMode = null; // "prototype" | "full"
 let moveStunUntil = 0;
+let stallBanner = null;
+
 
 let gameOver = false;
 let gameOverText = "";
@@ -111,7 +113,15 @@ function init() {
 
   input = new Input(renderer.domElement);
   player = new PlayerController(camera, input);
-  player.setPosition(0, 1.8, 8);
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "p") {
+      const p = player.pos;
+      console.log(
+        `new THREE.Vector3(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}),`
+      );
+    }
+  });
 
   hud = new HUD();
 
@@ -206,6 +216,12 @@ function startGame(mode) {
   world = buildWorld(scene, chosenMode);
 
   crawler = new Crawler(scene, makeWaypoints(), { visualMode: chosenMode });
+  player.setPosition(
+    crawler.position.x - 10,
+    crawler.position.y + 4,
+    crawler.position.z + 18
+  );
+  
 
   const steveR = crawler.collisionRadius ?? crawler.radius;
   steveObstacle = { center: crawler.position, radius: steveR };
@@ -218,7 +234,6 @@ function startGame(mode) {
   const spawnDir = new THREE.Vector3();
   camera.getWorldDirection(spawnDir);
   const spawnPos = playerStart.clone().addScaledVector(spawnDir, 30);
-  anglerfish = new Anglerfish(scene, world, { visualMode: chosenMode, spawnNear: spawnPos });
 
   hideOverlay();
   started = true;
@@ -250,10 +265,12 @@ function endGame(text) {
     title.style.fontSize = "34px";
     title.style.fontWeight = "700";
     title.style.letterSpacing = "0.6px";
+    title.style.color = "white";
     overlay.appendChild(title);
 
     const sub = document.createElement("div");
     sub.textContent = "Refresh to play again";
+    sub.color = "white";
     sub.style.opacity = "0.85";
     sub.style.fontSize = "16px";
     overlay.appendChild(sub);
@@ -451,7 +468,35 @@ function animate() {
       lastTool = player.tool;
     }
 
-    crawler.update(dt, world.obstacles);
+    const crawlerObs = (world.obstacles || []).filter(o => o?.kind !== "rock");
+    crawler.update(dt, crawlerObs);
+
+    if (stallBanner && crawler) {
+        if (crawler.state === "STALLED" && crawler.stallTimer > 0) {
+          const t = Math.ceil(crawler.stallTimer);
+          stallBanner.textContent = `STEVE HAS STALLED. PROTECT IT WHILE IT REBOOTS (${t}s)`;
+          stallBanner.style.display = "block";
+        } else {
+          stallBanner.style.display = "none";
+        }
+      }
+  
+
+
+    // --- NaN/Infinity guard: prevents rare physics/steering edge cases from freezing AI ---
+    if (
+      !Number.isFinite(crawler.position.x) ||
+      !Number.isFinite(crawler.position.y) ||
+      !Number.isFinite(crawler.position.z)
+    ) {
+      console.warn("[Guard] Crawler position invalid; resetting to last waypoint base.");
+      const wps = makeWaypoints();
+      crawler.position.set(wps[0].x, wps[0].y + 1.2, wps[0].z);
+      crawler.wpIndex = 0;
+      crawler.phase = "pathing";
+      crawler.state = "MOVING";
+    }
+
 
     // Harpoon
     if (player.tool === Tool.HARPOON && leftPressed) {
@@ -481,7 +526,8 @@ function animate() {
 
     // Repair
     if (player.tool === Tool.REPAIR && repairing) {
-      crawler.heal(repairRate * dt);
+      // Crawler API calls this "repair".
+      crawler.repair(repairRate * dt);
     }
 
     // Repair beam visuals

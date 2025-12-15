@@ -76,25 +76,44 @@ function faceTowardYawDir(group, dir, dt, turnRate) {
   group.rotation.y = lerpAngle(group.rotation.y, yaw, Math.min(1, dt * turnRate));
 }
 
-function resolveSphereCollisions(pos, radius, obstacles, yScale) {
+function resolveSphereCollisions(pos, radius, obstacles, yScale = 0.18) {
     if (!Array.isArray(obstacles)) return;
-
+  
+    const ys = typeof yScale === "number" ? Math.max(0.01, yScale) : 0.18;
+  
     for (const ob of obstacles) {
       if (!ob || !ob.center) continue;
+  
       const r = (ob.radius || 0) + radius;
   
       const dx = pos.x - ob.center.x;
       const dz = pos.z - ob.center.z;
-      const d2 = dx * dx + dz * dz;
   
-      if (d2 < r * r && d2 > 1e-10) {
+      // Vertical gating: if we're well above/below the obstacle, don't collide.
+      // Smaller ys => easier to "go over/under" things (good for sharks).
+      const dy = pos.y - ob.center.y;
+      if (Math.abs(dy) > r * ys) continue;
+  
+      let d2 = dx * dx + dz * dz;
+  
+      // Perfect overlap case (rare but catastrophic): pick a deterministic push direction.
+      if (d2 <= 1e-10) {
+        // push along a stable direction so we don't get stuck forever
+        const ang = (pos.x * 12.9898 + pos.z * 78.233) % (Math.PI * 2);
+        pos.x += Math.cos(ang) * (r + 1e-3);
+        pos.z += Math.sin(ang) * (r + 1e-3);
+        continue;
+      }
+  
+      if (d2 < r * r) {
         const d = Math.sqrt(d2);
         const push = (r - d) + 1e-3;
         pos.x += (dx / d) * push;
         pos.z += (dz / d) * push;
       }
     }
-}
+  }
+  
 
 function pointNearSegment(p, a, b, maxDist) {
   _v1.subVectors(b, a);
