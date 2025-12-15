@@ -9,7 +9,7 @@ import { Crawler } from "./entities/crawler.js";
 
 import { HUD } from "./ui/hud.js";
 import { SharkManager } from "./systems/sharkManager.js";
-import { Anglerfish } from "./entities/anglerfish.js";
+import { Anglerfish } from "./entities/Anglerfish.js";
 
 const overlay = document.getElementById("overlay");
 const startBtn = document.getElementById("startBtn"); // may exist in HTML, used for styling template
