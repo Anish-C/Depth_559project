@@ -1,4 +1,4 @@
-import * as THREE from "../../libs/cs559-three/build/three.module.js";
+import * as THREE from "three";
 import { loadGLBScene } from "../engine/assets.js";
 import {
   randRange,

@@ -1,4 +1,4 @@
-import * as THREE from "../../libs/cs559-three/build/three.module.js";
+import * as THREE from "three";
 
 const _up = new THREE.Vector3(0, 1, 0);
 const _v1 = new THREE.Vector3();

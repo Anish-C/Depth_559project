@@ -1,4 +1,4 @@
-import * as THREE from "../../../libs/cs559-three/build/three.module.js";
+import * as THREE from "three";
 import { Shark } from "../entities/shark.js";
 
 export const SHARK_DIFFICULTY_DEFAULTS = Object.freeze({
