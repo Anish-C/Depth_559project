@@ -13,17 +13,26 @@ export const SHARK_DIFFICULTY_DEFAULTS = Object.freeze({
   laneAnchorForward: 2.5,
 
   initialSpawnDelay: 6.0,
-  initialWaveCount: 2,
+  initialWaveCount: 3,
 
   waveProgressThresholds: [0.1, 0.28, 0.5, 0.7],
-  waveCounts: [2, 2, 3, 3],
-  waveStaggerSeconds: 3.05,
+  waveCounts: [3, 3, 5, 5],
+  waveStaggerSeconds: 2.03,
   waveJitterSeconds: 0.35,
 
-  minSpawnGapSeconds: 1.45,
+  minSpawnGapSeconds: 0.97,
 
   ambushOnRepair: true,
   ambushTimes: [0.0, 2.1, 4.2],
+
+  // Time-based trickle spawner (independent of waves)
+  trickleStartSeconds: 10.0,
+  trickleIntervalSeconds: 5.0,
+
+  // Cap scaling: +10% every 10s up to +80%
+  capIncreaseEverySeconds: 10,
+  capIncreaseStepPct: 0.10,
+  capIncreaseMaxSteps: 8,
 });
 
 function clamp(x, lo, hi) {
@@ -109,6 +118,12 @@ export class SharkManager {
     this._startTime = null;
     this._initialWaveQueued = false;
     this._lastSpawnAt = -1e9;
+
+    // Timed trickle spawner
+    this._nextTrickleAt = null;
+
+    // Base cap for dynamic scaling
+    this._baseMaxActiveSharks = this.tuning.maxActiveSharks;
 
     this.sharkTuning = {
       assetUrl: "assets/shark2.glb",
@@ -196,7 +211,8 @@ export class SharkManager {
 
   processSpawnQueue(nowS) {
     if (this.spawnQueue.length === 0) return;
-    if (this.sharks.length >= this.tuning.maxActiveSharks) return;
+    const cap = this._getEffectiveMaxActiveSharks(nowS);
+    if (this.sharks.length >= cap) return;
 
     const minGap =
       typeof this.tuning.minSpawnGapSeconds === "number" ? this.tuning.minSpawnGapSeconds : 0;
@@ -207,6 +223,22 @@ export class SharkManager {
     const item = this.spawnQueue.shift();
     this.spawnOne(item.crawler, item.forcedRole, item.forcedApproach);
     this._lastSpawnAt = nowS;
+  }
+
+  _getEffectiveMaxActiveSharks(nowS) {
+    // If start time isn't set yet, fall back to base
+    const start = this._startTime ?? nowS;
+    const elapsed = Math.max(0, nowS - start);
+
+    const every = Math.max(0.001, this.tuning.capIncreaseEverySeconds ?? 10);
+    const stepsMax = Math.max(0, Math.floor(this.tuning.capIncreaseMaxSteps ?? 8));
+    const stepPct = Math.max(0, this.tuning.capIncreaseStepPct ?? 0.10);
+
+    const steps = Math.min(stepsMax, Math.floor(elapsed / every));
+    const scale = 1 + steps * stepPct; // up to 1.8x by default
+
+    const cap = Math.ceil(this._baseMaxActiveSharks * scale);
+    return Math.max(1, cap);
   }
 
   update(
@@ -222,6 +254,12 @@ export class SharkManager {
     if (!resolvedPlayerPos) return;
 
     if (this._startTime === null) this._startTime = nowS;
+
+    // Initialize trickle schedule once we know start time
+    if (this._nextTrickleAt === null) {
+      const startDelay = typeof this.tuning.trickleStartSeconds === "number" ? this.tuning.trickleStartSeconds : 10.0;
+      this._nextTrickleAt = this._startTime + startDelay;
+    }
 
     // cleanup dead sharks
     for (let i = this.sharks.length - 1; i >= 0; i--) {
@@ -275,6 +313,14 @@ export class SharkManager {
       }
     }
     this._prevCrawlerState = crawler.state;
+
+    // time-based trickle spawns
+    if (nowS >= this._nextTrickleAt) {
+      const interval = Math.max(0.2, this.tuning.trickleIntervalSeconds || 5.0);
+      // Enqueue a single spawn at current time; queue/cap/gap will regulate actual spawn
+      this.enqueueSpawn(nowS, { crawler });
+      this._nextTrickleAt += interval;
+    }
 
     // spawn if time
     this.processSpawnQueue(nowS);
