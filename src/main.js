@@ -237,6 +237,14 @@ function startGame(mode) {
 
   hideOverlay();
   started = true;
+
+  // Show Group ID label (top-right) once the game starts
+  if (!document.getElementById("groupId")) {
+    const groupIdEl = document.createElement("div");
+    groupIdEl.id = "groupId";
+    groupIdEl.textContent = "Group ID: 6741";
+    document.body.appendChild(groupIdEl);
+  }
 }
 
 function endGame(text) {
@@ -524,10 +532,14 @@ function animate() {
       }
     }
 
-    // Repair
-    if (player.tool === Tool.REPAIR && repairing) {
-      // Crawler API calls this "repair".
-      crawler.repair(repairRate * dt);
+    // Repair: on click, increment crawler HP by 1 if aiming at it
+    if (player.tool === Tool.REPAIR && canRepair && leftPressed) {
+      camera.getWorldDirection(_dir);
+      const toCrawler = _tmpA.copy(crawler.position).sub(camera.position).normalize();
+      const facingDot = _dir.dot(toCrawler);
+      if (facingDot > 0.98 && crawler.hp < crawler.maxHP) {
+        crawler.heal(1);
+      }
     }
 
     // Repair beam visuals
